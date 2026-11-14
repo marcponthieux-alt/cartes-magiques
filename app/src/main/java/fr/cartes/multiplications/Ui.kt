@@ -292,110 +292,73 @@ private fun Home(g: Game) {
     val ver = g.progress.version
     val due = remember(ver) { g.progress.dueCount() }
     Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 14.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Text(
-            "Les cartes magiques", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Ink,
+            "Les cartes magiques", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Ink,
             modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center
         )
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Op.entries.forEach { o ->
                 val on = g.op == o
-                val shape = RoundedCornerShape(16.dp)
+                val shape = RoundedCornerShape(14.dp)
                 Column(
-                    Modifier.weight(1f).heightIn(min = 62.dp).clip(shape)
+                    Modifier.weight(1f).height(50.dp).clip(shape)
                         .background(if (on) o.color else Color.White)
                         .border(2.dp, o.color, shape)
-                        .clickable { g.selectOp(o) }
-                        .padding(vertical = 4.dp),
+                        .clickable { g.selectOp(o) },
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center
                 ) {
-                    Text(o.symbol, fontSize = 28.sp, lineHeight = 30.sp, fontWeight = FontWeight.Bold, color = if (on) Color.White else o.color)
+                    Text(o.symbol, fontSize = 22.sp, lineHeight = 22.sp, fontWeight = FontWeight.Bold, color = if (on) Color.White else o.color)
                     Text(
-                        o.word.replaceFirstChar { it.uppercase() }, fontSize = 12.sp,
+                        o.word.replaceFirstChar { it.uppercase() }, fontSize = 11.sp, lineHeight = 12.sp,
                         fontWeight = FontWeight.SemiBold, color = if (on) Color.White else o.color, maxLines = 1
                     )
                 }
             }
         }
-        Text(
-            if (g.op.univ == Univ.ADD) "Touche la table pour réviser un carré de cartes"
-            else "${g.op.label} : touche la table pour choisir tes 25 cartes",
-            fontSize = 14.sp, color = Sub, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center
-        )
         BigTable(g, ver)
         // Entraînement du jour (répétition espacée)
-        Column(
-            Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(g.op.color)
-                .clickable { g.startDaily() }.padding(horizontal = 16.dp, vertical = 12.dp)
+        Row(
+            Modifier.fillMaxWidth().height(52.dp).clip(RoundedCornerShape(16.dp)).background(g.op.color)
+                .clickable { g.startDaily() }.padding(horizontal = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Text("🧠  Entraînement du jour", fontSize = 19.sp, fontWeight = FontWeight.Bold, color = Color.White)
-            Text(
-                if (due > 0) "$due carte${if (due > 1) "s" else ""} à revoir aujourd'hui · environ 5 minutes"
-                else "12 cartes choisies pour toi · environ 5 minutes",
-                fontSize = 13.sp, color = Color.White
-            )
+            Text("🧠  Entraînement du jour", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
+            if (due > 0) Text("$due à revoir", fontSize = 13.sp, color = Color.White)
         }
-        if (g.op.univ == Univ.ADD) {
-            Panel {
-                Text("${g.op.label} : mon niveau", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Ink)
+        Panel(pad = PaddingValues(10.dp), gap = 8.dp) {
+            if (g.op.univ == Univ.ADD) {
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     listOf(10 to "Débutant", 20 to "Avancé", 100 to "Expert").forEach { (lv, name) ->
                         ModeChip("Jusqu'à $lv", name, g.addLevel == lv, Modifier.weight(1f)) { g.addLevel = lv }
                     }
                 }
-                Text(
-                    when (g.addLevel) {
-                        10 -> "Les résultats jusqu'à 10, à connaître par cœur."
-                        20 -> "Les résultats jusqu'à 20 : tout le répertoire à connaître par cœur."
-                        else -> "Calcul réfléchi jusqu'à 100 : dizaines, unités et passage de la dizaine."
-                    },
-                    fontSize = 13.sp, color = Sub
-                )
                 BigButton("▶  Jouer : ${Series.SIZE} calculs", true, g.op.color) { g.startLevel() }
-            }
-        } else {
-            Panel {
-                Text("Partie de 25 cartes : mon niveau", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Ink)
+            } else {
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Mode.entries.forEach { m ->
-                        ModeChip(m.label, m.sub, g.mode == m, Modifier.weight(1f)) { g.mode = m }
+                        ModeChip(m.label, null, g.mode == m, Modifier.weight(1f)) { g.mode = m }
                     }
                 }
                 if (g.mode != Mode.REV && !g.op.inverse) {
-                    Text("Je commence par", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Ink)
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Dir.entries.forEach { d ->
-                            ModeChip(d.label, d.sub, g.dir == d, Modifier.weight(1f)) { g.dir = d }
-                        }
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        ModeChip("24 → 3×8", null, g.dir == Dir.R2V, Modifier.weight(1f)) { g.dir = Dir.R2V }
+                        ModeChip("3×8 → 24", null, g.dir == Dir.V2R, Modifier.weight(1f)) { g.dir = Dir.V2R }
                     }
-                } else if (g.op.inverse && g.mode != Mode.REV) {
-                    Text("🔍 Le détective : trouve le nombre caché. 24 ÷ 6 = ?  c'est  6 × ? = 24", fontSize = 13.sp, color = Sub)
-                } else {
-                    Text("Révision : pas de voix ni de micro. Touche une carte pour la retourner.", fontSize = 13.sp, color = Sub)
                 }
             }
-        }
-        Row(
-            Modifier.fillMaxWidth().padding(horizontal = 4.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                "${Data.iconCount(g.op.univ)} autocollants · ✓ = carte bien connue",
-                fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Sub
-            )
-            Text(Data.teaser(g.op.univ), fontSize = 18.sp)
         }
         val status = when {
             g.ear.failed -> "Micro indisponible : un adulte validera les réponses."
             !g.ear.micAllowed -> "Autorise le micro pour répondre à voix haute."
             !g.ear.ready -> "Préparation du micro…"
-            else -> "Micro prêt 🎤  Tu peux aussi dire « pause » ou « je passe »."
+            else -> null
         }
-        Text(status, fontSize = 12.sp, color = Sub, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
+        if (status != null) Text(status, fontSize = 12.sp, color = Sub, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
         if (g.speakerMissingVoice) {
             Text(
                 "Voix française absente : installe-la dans les réglages Android (Synthèse vocale).",
@@ -406,20 +369,20 @@ private fun Home(g: Game) {
 }
 
 @Composable
-private fun ModeChip(label: String, sub: String, on: Boolean, modifier: Modifier, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(14.dp)
+private fun ModeChip(label: String, sub: String?, on: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(12.dp)
     Column(
-        modifier.heightIn(min = 58.dp).clip(shape)
+        modifier.height(if (sub == null) 42.dp else 50.dp).clip(shape)
             .background(if (on) Ink else Chip)
             .border(2.dp, if (on) Ink else Line, shape)
             .clickable { onClick() }
-            .padding(vertical = 8.dp, horizontal = 3.dp),
+            .padding(horizontal = 3.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
         val c = if (on) Color.White else Ink
-        Text(label, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c, textAlign = TextAlign.Center, maxLines = 1)
-        Text(sub, fontSize = 11.sp, lineHeight = 13.sp, color = c, textAlign = TextAlign.Center)
+        Text(label, fontSize = 15.sp, lineHeight = 17.sp, fontWeight = FontWeight.SemiBold, color = c, textAlign = TextAlign.Center, maxLines = 1)
+        if (sub != null) Text(sub, fontSize = 11.sp, lineHeight = 12.sp, color = c, textAlign = TextAlign.Center, maxLines = 1)
     }
 }
 
@@ -437,7 +400,7 @@ private fun BigTable(g: Game, ver: Int) {
             Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                 for (x in 0..10) {
                     if (x == 6) Spacer(Modifier.width(2.dp))
-                    val mod = if (x == 0) Modifier.width(32.dp).height(30.dp) else Modifier.weight(1f).height(30.dp)
+                    val mod = if (x == 0) Modifier.width(30.dp).height(27.dp) else Modifier.weight(1f).height(27.dp)
                     if (x == 0 && y == 0) {
                         Box(mod.clip(RoundedCornerShape(5.dp)).background(g.op.color), contentAlignment = Alignment.Center) {
                             Text(g.op.tableSymbol, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
@@ -452,7 +415,7 @@ private fun BigTable(g: Game, ver: Int) {
                                 .clickable { g.openQuad(q) },
                             contentAlignment = Alignment.Center
                         ) {
-                            Text("$v", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Data.fg(u, v))
+                            Text("$v", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Data.fg(u, v))
                             if ((x to y) in known) {
                                 Text(
                                     "✓", fontSize = 8.sp, fontWeight = FontWeight.Bold, color = Data.fg(u, v),
