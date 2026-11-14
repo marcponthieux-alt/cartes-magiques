@@ -43,6 +43,7 @@ object Answer {
         for (n in 1..100) { val w = fr(n); phrases += w; phrases += w.replace('-', ' ') }
         for (a in 1..10) for (b in 1..10) phrases += "${fr(a)} fois ${fr(b)}"
         phrases += "égale"
+        phrases += "pause"; phrases += "je passe"; phrases += "passe"
         val arr = JSONArray()
         phrases.forEach { arr.put(it) }
         arr.put("[unk]")
@@ -78,6 +79,16 @@ object Answer {
         }
         flush()
         return out
+    }
+
+    enum class Command { PAUSE, PASS }
+
+    /** Mots de commande reconnus au micro : « pause » et « je passe ». */
+    fun command(text: String): Command? {
+        val t = text.lowercase()
+        if (Regex("\\bpause\\b").containsMatchIn(t)) return Command.PAUSE
+        if (Regex("\\bpass(e|er|es)?\\b").containsMatchIn(t)) return Command.PASS
+        return null
     }
 
     data class Result(val ok: Boolean, val said: String)

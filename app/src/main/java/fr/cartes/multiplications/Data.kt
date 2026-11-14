@@ -54,24 +54,46 @@ object Data {
     }
 }
 
-/** Textes lus par le haut-parleur. Un point « . » = un temps de silence. */
+/**
+ * Textes lus par le haut-parleur. Un point « . » = un temps de silence.
+ * Face multiplication : seule la ligne de l'emplacement de la carte (en gras) est lue,
+ * en question comme en réponse. Les autres lignes restent seulement affichées.
+ */
 object Speech {
-    /**
-     * Face résultat : « 24 égale ? ».
-     * Face multiplication : seule la ligne de l'emplacement de la carte (en gras) est lue,
-     * par exemple « 4 fois 6, égale ? » pour la carte ligne 4, colonne 6.
-     */
     fun question(dir: Dir, q: Int, i: Int): String {
-        val v = Data.value(q, i)
-        if (dir == Dir.R2V) return "$v égale ?"
+        if (dir == Dir.R2V) return "${Data.value(q, i)} égale ?"
         val (a, b) = Data.geo(q, i)
         return "$a fois $b, égale ?"
     }
 
-    fun answer(v: Int): String =
-        Data.prods(v).joinToString(" ") { "${it.first} fois ${it.second}.. $v..." }
+    fun answer(q: Int, i: Int): String {
+        val (a, b) = Data.geo(q, i)
+        return "$a fois $b.. ${a * b}..."
+    }
 
-    fun right(v: Int): String = "Bravo. " + answer(v)
+    fun wrong(dir: Dir, q: Int, i: Int): String = question(dir, q, i) + "... " + answer(q, i)
+}
 
-    fun wrong(dir: Dir, q: Int, i: Int): String = question(dir, q, i) + "... " + answer(Data.value(q, i))
+/** Encouragements et félicitations, de temps en temps, pour aller au bout des 25 cartes. */
+object Cheers {
+    private val NOMBRES = mapOf(
+        3 to "Trois", 6 to "Six", 9 to "Neuf", 12 to "Douze", 15 to "Quinze",
+        18 to "Dix-huit", 21 to "Vingt et une", 24 to "Vingt-quatre"
+    )
+    private val GENERIC = listOf(
+        "Continue comme ça !", "Tu te débrouilles très bien !", "Super, on continue !",
+        "Tu progresses !", "Quelle mémoire !", "Bravo, tu es sur la bonne route !"
+    )
+
+    fun after(ok: Boolean, streak: Int, doneCount: Int, total: Int): String? {
+        val left = total - doneCount
+        if (left <= 0) return null
+        if (ok && streak >= 3 && streak % 3 == 0) return "${NOMBRES[streak] ?: streak} bonnes réponses de suite !"
+        if (total >= 10 && left == 1) return "Dernière carte !"
+        if (total >= 10 && left == 5) return "Plus que cinq cartes, tu y es presque !"
+        if (total >= 10 && doneCount == total / 2) return "Tu es à la moitié, continue !"
+        if (!ok && (0..2).random() == 0) return "Ce n'est pas grave, on continue !"
+        if (doneCount % 4 == 0) return GENERIC.random()
+        return null
+    }
 }
