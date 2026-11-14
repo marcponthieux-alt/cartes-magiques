@@ -37,6 +37,9 @@ class Speaker(ctx: Context) : TextToSpeech.OnInitListener {
     var missingVoice by mutableStateOf(false)
         private set
 
+    /** Hauteur de la voix : un peu plus aiguë dans l'univers des additions et soustractions. */
+    var pitch = 1.0f
+
     override fun onInit(status: Int) {
         initDone = true
         if (status == TextToSpeech.SUCCESS) {
@@ -78,6 +81,7 @@ class Speaker(ctx: Context) : TextToSpeech.OnInitListener {
         if (tail.isNotEmpty()) parts += tail to 0
 
         callbacks.clear()
+        tts.setPitch(pitch)
         var first = true
         var lastId: String? = null
         var k = 0

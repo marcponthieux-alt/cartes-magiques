@@ -18,7 +18,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         val ear = Ear(this)
-        game = Game(Speaker(this), ear)
+        game = Game(Speaker(this), ear, Progress(this))
         setContent {
             val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
                 ear.micAllowed = granted

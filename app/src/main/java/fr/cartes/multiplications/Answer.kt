@@ -32,17 +32,23 @@ object Answer {
         put("cinquante", 50); put("soixante", 60); put("cent", 100); put("cents", 100)
     }
     private val FOIS = setOf("fois", "foi", "foie", "x")
-    private val SEPARATORS = setOf("égale", "égal", "égalent", "font", "fait", "ça")
+    private val PLUS = setOf("plus")
+    private val SEPARATORS = setOf(
+        "égale", "égal", "égalent", "font", "fait", "ça", "moins", "divisé", "divise", "divisés", "par"
+    )
 
     /**
-     * Vocabulaire imposé au moteur de reconnaissance : seulement les nombres
-     * et les multiplications du jeu. Cela réduit beaucoup les erreurs.
+     * Vocabulaire imposé au moteur de reconnaissance : seulement les nombres, les opérations
+     * du jeu et les commandes. Cela réduit beaucoup les erreurs.
      */
     val GRAMMAR: String by lazy {
         val phrases = LinkedHashSet<String>()
-        for (n in 1..100) { val w = fr(n); phrases += w; phrases += w.replace('-', ' ') }
-        for (a in 1..10) for (b in 1..10) phrases += "${fr(a)} fois ${fr(b)}"
-        phrases += "égale"
+        for (n in 0..100) { val w = fr(n); phrases += w; phrases += w.replace('-', ' ') }
+        for (a in 1..10) for (b in 1..10) {
+            phrases += "${fr(a)} fois ${fr(b)}"
+            phrases += "${fr(a)} plus ${fr(b)}"
+        }
+        phrases += "égale"; phrases += "moins"; phrases += "divisé par"
         phrases += "pause"; phrases += "je passe"; phrases += "passe"
         val arr = JSONArray()
         phrases.forEach { arr.put(it) }
@@ -53,16 +59,18 @@ object Answer {
     sealed interface Tok {
         data class N(val n: Int) : Tok
         data object F : Tok
+        data object P : Tok
     }
 
     fun parse(text: String): List<Tok> {
         val out = mutableListOf<Tok>()
         var cur: Int? = null
         fun flush() { cur?.let { out.add(Tok.N(it)) }; cur = null }
-        val words = text.lowercase().replace('-', ' ').replace('×', ' ')
+        val words = text.lowercase().replace('-', ' ').replace('×', ' ').replace('+', ' ')
             .split(Regex("\\s+")).filter { it.isNotBlank() }
         for (w in words) {
             if (w in FOIS) { flush(); out.add(Tok.F); continue }
+            if (w in PLUS) { flush(); out.add(Tok.P); continue }
             if (w == "et") continue
             if (w in SEPARATORS) { flush(); continue }
             val t = w.toIntOrNull() ?: WORDS[w]
@@ -94,28 +102,34 @@ object Answer {
     data class Result(val ok: Boolean, val said: String)
 
     /**
-     * R2V : on montre le résultat, l'enfant doit dire une multiplication qui le donne.
-     * V2R : on montre la multiplication, l'enfant doit dire le résultat.
+     * + et × en partant du résultat : l'enfant dit une opération qui donne ce résultat.
+     * Sinon (en partant de l'opération, ou − et ÷) : l'enfant dit un nombre ;
+     * on retient le dernier nombre prononcé (« 24 divisé par 6, 4 » → 4).
      */
-    fun check(text: String, v: Int, dir: Dir): Result {
+    fun check(text: String, f: Fact, dir: Dir): Result {
         val toks = parse(text)
+        val opTok: Tok = if (f.op.univ == Univ.ADD) Tok.P else Tok.F
         val pairs = mutableListOf<Pair<Int, Int>>()
         val used = mutableSetOf<Int>()
         for (k in toks.indices) {
-            if (toks[k] == Tok.F && k > 0 && k < toks.lastIndex) {
+            if ((toks[k] == Tok.F || toks[k] == Tok.P) && k > 0 && k < toks.lastIndex) {
                 val a = toks[k - 1]; val b = toks[k + 1]
-                if (a is Tok.N && b is Tok.N) { pairs += a.n to b.n; used += k - 1; used += k + 1 }
+                if (a is Tok.N && b is Tok.N) {
+                    if (toks[k] == opTok) pairs += a.n to b.n
+                    used += k - 1; used += k + 1
+                }
             }
         }
         val singles = toks.indices.filter { it !in used }.mapNotNull { (toks[it] as? Tok.N)?.n }
-        val ok = if (dir == Dir.R2V) {
-            pairs.any { it.first * it.second == v && it.first in 1..10 && it.second in 1..10 }
+        val ok = if (!f.op.inverse && dir == Dir.R2V) {
+            pairs.any { Data.combine(f.op.univ, it.first, it.second) == f.v && it.first in 1..10 && it.second in 1..10 }
         } else {
-            singles.contains(v)
+            val expected = if (f.op.inverse) f.a else f.v
+            singles.lastOrNull() == expected
         }
         val said = toks.joinToString(" ") {
-            when (it) { is Tok.N -> it.n.toString(); Tok.F -> "×" }
-        }.replace(" × ", "×").ifBlank { text }
+            when (it) { is Tok.N -> it.n.toString(); Tok.F -> "×"; Tok.P -> "+" }
+        }.replace(" × ", "×").replace(" + ", "+").ifBlank { text }
         return Result(ok, said)
     }
 }

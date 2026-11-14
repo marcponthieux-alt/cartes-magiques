@@ -2,13 +2,14 @@ package fr.cartes.multiplications
 
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 
-enum class Screen { HOME, MEMO, GAME, END, REVISION }
+enum class Screen { HOME, MEMO, GAME, END, REVISION, DAILY_END }
 
 enum class Mode(val label: String, val sub: String) {
     REV("Révision", "Je regarde les cartes"),
@@ -17,10 +18,10 @@ enum class Mode(val label: String, val sub: String) {
     EXP("Expert", "Une carte à la fois")
 }
 
-/** R2V : on part du résultat (recto). V2R : on part de la multiplication (verso). */
+/** Pour + et × : R2V on part du résultat (recto), V2R on part de l'opération (verso). */
 enum class Dir(val label: String, val sub: String) {
-    R2V("Le résultat", "24 → 3×8"),
-    V2R("La multiplication", "3×8 → 24")
+    R2V("Le résultat", "on trouve l'opération"),
+    V2R("L'opération", "on trouve le résultat")
 }
 
 enum class Phase { PICK, IDLE, ASK, LISTEN, RIGHT, WRONG, PASSED }
@@ -28,12 +29,13 @@ enum class Phase { PICK, IDLE, ASK, LISTEN, RIGHT, WRONG, PASSED }
 /** Résultat d'une carte jouée. */
 enum class Res { OK, KO, PASS }
 
-/** Déroulement d'une partie et du mode révision. */
-class Game(private val speaker: Speaker, val ear: Ear) {
+/** Déroulement d'une partie (25 cartes ou entraînement du jour) et du mode révision. */
+class Game(private val speaker: Speaker, val ear: Ear, val progress: Progress) {
     private val h = Handler(Looper.getMainLooper())
     private val ui = Handler(Looper.getMainLooper())
 
     var screen by mutableStateOf(Screen.HOME)
+    var op by mutableStateOf(Op.MUL)
     var quad by mutableIntStateOf(0)
     var mode by mutableStateOf(Mode.DEB)
     var dir by mutableStateOf(Dir.V2R)
@@ -51,6 +53,10 @@ class Game(private val speaker: Speaker, val ear: Ear) {
     var targets by mutableStateOf((0..24).toList())
     var gamePaused by mutableStateOf(false)
 
+    /** Entraînement du jour : une liste de cartes choisies par la répétition espacée. */
+    var daily by mutableStateOf(false)
+    var dailyList by mutableStateOf<List<Fact>>(emptyList())
+
     var bannerOn by mutableStateOf(false)
     var bannerText by mutableStateOf("")
     var celebrateOn by mutableStateOf(false)
@@ -59,18 +65,28 @@ class Game(private val speaker: Speaker, val ear: Ear) {
     // Mode révision
     var revOnly by mutableStateOf<Set<Int>?>(null)
     var revForBonus by mutableStateOf(false)
-    var revAllMult by mutableStateOf(true)
-    val revMult = mutableStateMapOf<Int, Boolean>()
+    var revAllBack by mutableStateOf(true)
+    val revBack = mutableStateMapOf<Int, Boolean>()
     var revSel by mutableStateOf<Int?>(null)
 
     private var queue: List<Int> = (0..24).toList()
     private var streak = 0
     private var bgPaused = false
+    private var listenStart = 0L
 
     val score: Int get() = done.values.count { it == Res.OK }
+    val total: Int get() = targetsAll().size
     val missing: List<Int> get() = (0..24).filter { done[it] == Res.KO || done[it] == Res.PASS }
     val speakerMissingVoice: Boolean get() = speaker.missingVoice
+    private val effMode: Mode get() = if (daily) Mode.AV else mode
 
+    /** La carte jouée à l'emplacement i (0 à 24 dans un carré, ou rang dans l'entraînement du jour). */
+    fun fact(i: Int): Fact = if (daily) dailyList[i] else Data.fact(op, quad, i)
+
+    /** + et × en partant de l'opération : la question est sur la face « opérations » (verso). */
+    fun questionIsBack(f: Fact): Boolean = !f.op.inverse && dir == Dir.V2R
+
+    private fun targetsAll(): List<Int> = if (daily) dailyList.indices.toList() else (0..24).toList()
     private fun later(ms: Long, f: () -> Unit) { h.postDelayed({ f() }, ms) }
     private fun cancelAll() { h.removeCallbacksAndMessages(null); ear.stop(); speaker.stop() }
     private fun doneCount() = targets.count { done[it] != null }
@@ -87,15 +103,18 @@ class Game(private val speaker: Speaker, val ear: Ear) {
 
     /* ---------- Navigation ---------- */
 
+    fun selectOp(o: Op) { op = o }
+
     fun goHome() {
         cancelAll(); ui.removeCallbacksAndMessages(null)
         bannerOn = false; celebrateOn = false; gamePaused = false
+        daily = false
         screen = Screen.HOME; sel = null
     }
 
     fun openQuad(q: Int) {
         cancelAll()
-        quad = q; bonus = false; done.clear()
+        daily = false; quad = q; bonus = false; done.clear()
         if (mode == Mode.REV) { openRevision(null, false); return }
         hint = false; screen = Screen.MEMO
         later(5000) { hint = true }
@@ -110,18 +129,20 @@ class Game(private val speaker: Speaker, val ear: Ear) {
     private fun openRevision(only: Set<Int>?, forBonus: Boolean) {
         cancelAll()
         revOnly = only; revForBonus = forBonus
-        revAllMult = true; revMult.clear(); revSel = null
+        // + et × : face « opérations » d'abord. − et ÷ : face « question » d'abord.
+        revAllBack = !op.inverse
+        revBack.clear(); revSel = null
         screen = Screen.REVISION
     }
 
-    fun revShowsMult(i: Int): Boolean = revMult[i] ?: revAllMult
+    fun revShowsBack(i: Int): Boolean = revBack[i] ?: revAllBack
 
-    fun revToggleAll() { revAllMult = !revAllMult; revMult.clear() }
+    fun revToggleAll() { revAllBack = !revAllBack; revBack.clear() }
 
     fun revTap(i: Int) {
         val only = revOnly
         if (only != null && i !in only) return
-        revMult[i] = !revShowsMult(i)
+        revBack[i] = !revShowsBack(i)
         revSel = i
     }
 
@@ -131,7 +152,7 @@ class Game(private val speaker: Speaker, val ear: Ear) {
     /* ---------- Partie ---------- */
 
     private fun startGame() {
-        done.clear(); targets = (0..24).toList(); bonus = false
+        done.clear(); targets = (0..24).toList(); bonus = false; daily = false
         begin()
     }
 
@@ -143,29 +164,48 @@ class Game(private val speaker: Speaker, val ear: Ear) {
         begin()
     }
 
+    /** Entraînement du jour : quelques cartes choisies par la répétition espacée. */
+    fun startDaily() {
+        cancelAll()
+        dailyList = progress.dailyPlan(op)
+        daily = true; bonus = false
+        done.clear(); targets = dailyList.indices.toList()
+        begin()
+    }
+
     private fun begin() {
         cancelAll()
-        queue = if (mode == Mode.DEB) targets else targets.shuffled()
+        queue = when {
+            daily -> targets
+            effMode == Mode.DEB -> targets
+            // Les cartes les plus fragiles d'abord, quand l'attention est la meilleure.
+            else -> targets.shuffled().sortedBy { progress.box(fact(it)) }
+        }
         sel = null; said = null; revealed = false; lastEarn = null; streak = 0; gamePaused = false
-        phase = if (mode == Mode.DEB) Phase.PICK else Phase.IDLE
-        intro = dir == Dir.V2R && !bonus
+        phase = if (effMode == Mode.DEB) Phase.PICK else Phase.IDLE
+        intro = !daily && !bonus && questionIsBack(fact(0))
         screen = Screen.GAME
         if (intro) later(450) { intro = false }
-        if (mode != Mode.DEB) later(1500) { nextInQueue()?.let { ask(it) } }
+        if (effMode != Mode.DEB) later(1300) { nextInQueue()?.let { ask(it) } }
     }
 
     private fun nextInQueue(): Int? = queue.firstOrNull { done[it] == null }
 
     fun pick(i: Int) {
-        if (screen == Screen.GAME && mode == Mode.DEB && phase == Phase.PICK && !gamePaused &&
+        if (screen == Screen.GAME && effMode == Mode.DEB && phase == Phase.PICK && !gamePaused &&
             i in targets && done[i] == null
         ) ask(i)
     }
 
     private fun ask(i: Int) {
-        h.removeCallbacksAndMessages(null); ear.stop()
+        h.removeCallbacksAndMessages(null); ear.stop(); speaker.stop()
         sel = i; phase = Phase.ASK; said = null; revealed = false
-        speaker.speak(Speech.question(dir, quad, i)) { listen() }
+        val f = fact(i)
+        speaker.pitch = if (f.op.univ == Univ.ADD) 1.12f else 1.0f
+        Earcon.play(f.op)
+        later(Earcon.durationMs(f.op)) {
+            speaker.speak(Speech.question(f, dir)) { listen() }
+        }
     }
 
     fun repeatQuestion() { val i = sel ?: return; if (phase == Phase.LISTEN && !gamePaused) ask(i) }
@@ -173,6 +213,7 @@ class Game(private val speaker: Speaker, val ear: Ear) {
     private fun listen() {
         if (screen != Screen.GAME || phase != Phase.ASK || gamePaused) return
         phase = Phase.LISTEN
+        listenStart = SystemClock.elapsedRealtime()
         if (!ear.usable) return // les boutons de secours s'affichent
         ear.listen { text -> onHeard(text) }
         // Pas de réponse : on repose la question.
@@ -188,34 +229,35 @@ class Game(private val speaker: Speaker, val ear: Ear) {
             Answer.Command.PASS -> { pass(); return }
             null -> {}
         }
-        val r = Answer.check(text, Data.value(quad, i), dir)
-        reply(r.ok, r.said)
+        val r = Answer.check(text, fact(i), dir)
+        reply(r.ok, r.said, SystemClock.elapsedRealtime() - listenStart < 6000)
     }
 
     /** Boutons de secours quand le micro n'est pas disponible. */
     fun manual(ok: Boolean) {
         if (phase != Phase.LISTEN || gamePaused) return
         h.removeCallbacksAndMessages(null); ear.stop()
-        reply(ok, null)
+        reply(ok, null, true)
     }
 
-    private fun reply(ok: Boolean, saidText: String?) {
+    private fun reply(ok: Boolean, saidText: String?, fast: Boolean) {
         val i = sel ?: return
-        val v = Data.value(quad, i)
+        val f = fact(i)
+        progress.record(f, ok, fast)
         if (ok) {
             done[i] = Res.OK; lastEarn = i; phase = Phase.RIGHT; streak++
             val cheer = if (bonus) null else Cheers.after(true, streak, doneCount(), targets.size)
             val head = if (bonus) "Bravo. Erreur corrigée !. " else "Bravo. "
-            if (bonus) showCelebrate(Data.icon(v))
+            if (bonus) showCelebrate(Data.icon(f.op.univ, f.v))
             cheer?.let { showBanner(it) }
-            speaker.speak(head + Speech.answer(quad, i) + (cheer?.let { " $it" } ?: "")) {
+            speaker.speak(head + Speech.answer(f) + (cheer?.let { " $it" } ?: "")) {
                 later(500) { next() }
             }
         } else {
             done[i] = Res.KO; said = saidText; revealed = true; phase = Phase.WRONG; streak = 0
             val cheer = Cheers.after(false, streak, doneCount(), targets.size)
             cheer?.let { showBanner(it) }
-            speaker.speak(Speech.wrong(dir, quad, i) + (cheer?.let { " $it" } ?: "")) {
+            speaker.speak(Speech.wrong(f, dir) + (cheer?.let { " $it" } ?: "")) {
                 later(900) { revealed = false; later(700) { next() } }
             }
         }
@@ -226,8 +268,10 @@ class Game(private val speaker: Speaker, val ear: Ear) {
         val i = sel ?: return
         if (screen != Screen.GAME || gamePaused || (phase != Phase.ASK && phase != Phase.LISTEN)) return
         h.removeCallbacksAndMessages(null); ear.stop(); speaker.stop()
+        val f = fact(i)
+        progress.record(f, false, false)
         done[i] = Res.PASS; streak = 0; said = null; revealed = true; phase = Phase.PASSED
-        speaker.speak(Speech.answer(quad, i)) {
+        speaker.speak(Speech.answer(f)) {
             later(900) { revealed = false; later(700) { next() } }
         }
     }
@@ -252,13 +296,20 @@ class Game(private val speaker: Speaker, val ear: Ear) {
     private fun next() {
         if (screen != Screen.GAME || gamePaused) return
         if (targets.all { done[it] != null }) { finish(); return }
-        if (mode == Mode.DEB) { sel = null; phase = Phase.PICK; revealed = false; return }
+        if (effMode == Mode.DEB) { sel = null; phase = Phase.PICK; revealed = false; return }
         nextInQueue()?.let { ask(it) }
     }
 
     private fun finish() {
-        sel = null; screen = Screen.END
+        sel = null
         val s = score
+        speaker.pitch = 1.0f
+        if (daily) {
+            screen = Screen.DAILY_END
+            speaker.speak("Entraînement terminé !. Tu as trouvé $s cartes sur ${dailyList.size}.. Reviens demain, ton cerveau range tes cartes pendant la nuit.") {}
+            return
+        }
+        screen = Screen.END
         val text = when {
             s == 25 && bonus -> "Bravo !. Tu as récupéré tous tes bons points !"
             s == 25 -> "Parfait !. Vingt-cinq bons points sur vingt-cinq !"
