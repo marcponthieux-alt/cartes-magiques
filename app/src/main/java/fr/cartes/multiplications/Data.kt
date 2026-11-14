@@ -20,8 +20,9 @@ enum class Op(val symbol: String, val word: String, val univ: Univ, val accent: 
 }
 
 /**
- * Un fait numérique : la carte (ligne a, colonne b) jouée avec une opération.
- * ADD : a + b = v · SUB : v − b = a · MUL : a × b = v · DIV : v ÷ b = a
+ * Un fait numérique : la carte de la colonne a (largeur, axe horizontal) et de la ligne b
+ * (hauteur, axe vertical), jouée avec une opération. Le 1 × 1 est en bas à gauche.
+ * ADD : a + b = v · SUB : v − a = b · MUL : a × b = v (a de large, b de haut) · DIV : v ÷ a = b
  */
 data class Fact(val op: Op, val a: Int, val b: Int) {
     val v: Int get() = Data.combine(op.univ, a, b)
@@ -53,18 +54,27 @@ object Data {
         "🚀", "🚲", "⚽", "🎈", "🎁", "🌈", "⭐", "🍓", "🍦", "🎸", "🏆"
     )
 
-    /* ----- Univers + − : magiciens, détectives et objets du quotidien (sommes 2 à 20) ----- */
+    /* ----- Univers + − : magiciens, détectives et objets du quotidien ----- */
     val ADD_ICONS = listOf(
         "🎩", "🔮", "🃏", "🔍", "🔑", "🗝️", "🕯️", "🧭", "🔦", "✨",
         "🎲", "🧩", "⏰", "☂️", "🎒", "✏️", "🧲", "🎨", "👑"
     )
 
     /**
-     * Univers + − : un dégradé de couleurs douces, du jaune (2) au rose (20).
-     * Les résultats égaux forment des diagonales de même couleur dans le tableau.
+     * Univers + − : 10 couleurs douces, choisies selon le chiffre des unités
+     * (4, 14, 24… ont la même couleur, pour faire voir les régularités).
      */
+    private val UNITS_PAL = listOf(
+        0xFFD8E2DC, 0xFFFFADAD, 0xFFFFD6A5, 0xFFFDFFB6, 0xFFCAFFBF,
+        0xFF9BF6FF, 0xFFA0C4FF, 0xFFBDB2FF, 0xFFFFC6FF, 0xFFE4C1A1
+    )
+
+    /** Les deux nombres d'une addition, dans les bâtons de dizaines. */
+    val COLOR_A = Color(0xFFE8743B)
+    val COLOR_B = Color(0xFF2E86AB)
+
     fun bg(u: Univ, v: Int): Color =
-        if (u == Univ.ADD) Color.hsv(50f + (v - 2) * (320f - 50f) / 18f, 0.40f, 0.97f)
+        if (u == Univ.ADD) Color(UNITS_PAL[((v % 10) + 10) % 10])
         else if (v in ONCE) WHITE else PAL[v]?.let { Color(it) } ?: MINT
 
     fun fg(u: Univ, v: Int): Color =
@@ -73,7 +83,8 @@ object Data {
     fun isWhite(u: Univ, v: Int): Boolean = u == Univ.MUL && v in ONCE
 
     fun icon(u: Univ, v: Int): String =
-        if (u == Univ.ADD) ADD_ICONS[v - 2] else MUL_ICONS[MUL_VALS.indexOf(v)]
+        if (u == Univ.ADD) ADD_ICONS[((v - 2) % ADD_ICONS.size + ADD_ICONS.size) % ADD_ICONS.size]
+        else MUL_ICONS[MUL_VALS.indexOf(v)]
 
     fun teaser(u: Univ): String = (if (u == Univ.ADD) ADD_ICONS else MUL_ICONS).take(7).joinToString("")
     fun iconCount(u: Univ): Int = if (u == Univ.ADD) ADD_ICONS.size else MUL_ICONS.size
@@ -82,13 +93,21 @@ object Data {
     fun pairs(u: Univ, v: Int): List<Pair<Int, Int>> =
         (1..10).flatMap { a -> (1..10).filter { b -> combine(u, a, b) == v }.map { b -> a to b } }
 
-    /** Carré 0 : 1-5 × 1-5, 1 : 1-5 × 6-10, 2 : 6-10 × 1-5, 3 : 6-10 × 6-10. */
+    /**
+     * Carré 0 : colonnes 1-5, lignes 1-5 (en bas à gauche) · 1 : colonnes 6-10, lignes 1-5
+     * 2 : colonnes 1-5, lignes 6-10 · 3 : colonnes 6-10, lignes 6-10 (en haut à droite).
+     */
     fun rows(q: Int): List<Int> { val s = if (q >= 2) 6 else 1; return (s..s + 4).toList() }
     fun cols(q: Int): List<Int> { val s = if (q % 2 == 1) 6 else 1; return (s..s + 4).toList() }
-    fun fact(op: Op, q: Int, i: Int): Fact = Fact(op, rows(q)[i / 5], cols(q)[i % 5])
+
+    /** Lignes affichées de haut en bas (la plus grande en haut). */
+    fun rowsTopDown(q: Int): List<Int> = rows(q).reversed()
+
+    /** Emplacement i (0 à 24) lu de gauche à droite et de haut en bas. */
+    fun fact(op: Op, q: Int, i: Int): Fact = Fact(op, cols(q)[i % 5], rowsTopDown(q)[i / 5])
     fun range(q: Int): String {
         val r = rows(q); val c = cols(q)
-        return "Lignes ${r.first()} à ${r.last()} · colonnes ${c.first()} à ${c.last()}"
+        return "Colonnes ${c.first()} à ${c.last()} · lignes ${r.first()} à ${r.last()}"
     }
 }
 
@@ -98,13 +117,13 @@ object Data {
  */
 object Speech {
     fun question(f: Fact, dir: Dir): String = when {
-        f.op.inverse -> "${f.v} ${f.op.word} ${f.b}, égale ?"
+        f.op.inverse -> "${f.v} ${f.op.word} ${f.a}, égale ?"
         dir == Dir.R2V -> "${f.v} égale ?"
         else -> "${f.a} ${f.op.word} ${f.b}, égale ?"
     }
 
     fun answer(f: Fact): String =
-        if (f.op.inverse) "${f.v} ${f.op.word} ${f.b}.. ${f.a}..."
+        if (f.op.inverse) "${f.v} ${f.op.word} ${f.a}.. ${f.b}..."
         else "${f.a} ${f.op.word} ${f.b}.. ${f.v}..."
 
     fun wrong(f: Fact, dir: Dir): String = question(f, dir) + "... " + answer(f)
@@ -131,5 +150,47 @@ object Cheers {
         if (!ok && (0..2).random() == 0) return "Ce n'est pas grave, on continue !"
         if (doneCount % 4 == 0) return GENERIC.random()
         return null
+    }
+}
+
+/**
+ * Séries d'additions ou de soustractions par niveau.
+ * Jusqu'à 10 et jusqu'à 20 : le répertoire additif à mémoriser (cartes les plus fragiles d'abord).
+ * Jusqu'à 100 : du calcul réfléchi, par familles, de la plus facile à la plus difficile.
+ */
+object Series {
+    const val SIZE = 15
+
+    fun additive(op: Op, level: Int, progress: Progress): List<Fact> {
+        if (level <= 20) {
+            val pool = progress.allFacts(op).filter { it.a + it.b <= level }
+            return pool.shuffled().sortedBy { progress.box(it) }.take(SIZE).shuffled()
+        }
+        val out = mutableListOf<Fact>()
+        // + : grand + petit ; − : (grand + petit) − petit = grand
+        fun add(big: Int, small: Int) {
+            out += if (op == Op.ADD) Fact(op, big, small) else Fact(op, small, big)
+        }
+        // 1. Ajouter des dizaines entières : 34 + 20
+        repeat(4) {
+            val big = (1..7).random() * 10 + (1..9).random()
+            add(big, (1..(9 - big / 10)).random() * 10)
+        }
+        // 2. Ajouter un petit nombre sans changer de dizaine : 34 + 5
+        repeat(4) {
+            val u = (1..7).random()
+            add((1..8).random() * 10 + u, (1..(9 - u)).random())
+        }
+        // 3. Ajouter un petit nombre avec passage de la dizaine : 38 + 5
+        repeat(4) {
+            val u = (2..9).random()
+            add((1..8).random() * 10 + u, ((10 - u)..9).random())
+        }
+        // 4. Deux nombres de deux chiffres : 47 + 38
+        repeat(3) {
+            val big = (15..60).random()
+            add(big, (11..(99 - big)).random())
+        }
+        return out
     }
 }

@@ -56,6 +56,12 @@ class Game(private val speaker: Speaker, val ear: Ear, val progress: Progress) {
     /** Entraînement du jour : une liste de cartes choisies par la répétition espacée. */
     var daily by mutableStateOf(false)
     var dailyList by mutableStateOf<List<Fact>>(emptyList())
+    /** true : entraînement du jour ; false : série d'additions ou de soustractions par niveau. */
+    var trainingDay by mutableStateOf(true)
+    var seriesTitle by mutableStateOf("Entraînement du jour")
+
+    /** + et − : niveau de la série (résultats jusqu'à 10, 20 ou 100). */
+    var addLevel by mutableIntStateOf(10)
 
     var bannerOn by mutableStateOf(false)
     var bannerText by mutableStateOf("")
@@ -83,8 +89,11 @@ class Game(private val speaker: Speaker, val ear: Ear, val progress: Progress) {
     /** La carte jouée à l'emplacement i (0 à 24 dans un carré, ou rang dans l'entraînement du jour). */
     fun fact(i: Int): Fact = if (daily) dailyList[i] else Data.fact(op, quad, i)
 
+    /** + et − : on part toujours de l'opération. × : au choix. */
+    fun dirOf(f: Fact): Dir = if (f.op.univ == Univ.ADD) Dir.V2R else dir
+
     /** + et × en partant de l'opération : la question est sur la face « opérations » (verso). */
-    fun questionIsBack(f: Fact): Boolean = !f.op.inverse && dir == Dir.V2R
+    fun questionIsBack(f: Fact): Boolean = !f.op.inverse && dirOf(f) == Dir.V2R
 
     private fun targetsAll(): List<Int> = if (daily) dailyList.indices.toList() else (0..24).toList()
     private fun later(ms: Long, f: () -> Unit) { h.postDelayed({ f() }, ms) }
@@ -115,7 +124,8 @@ class Game(private val speaker: Speaker, val ear: Ear, val progress: Progress) {
     fun openQuad(q: Int) {
         cancelAll()
         daily = false; quad = q; bonus = false; done.clear()
-        if (mode == Mode.REV) { openRevision(null, false); return }
+        // + et − : le tableau sert à la révision des cartes 1 + 1 à 10 + 10.
+        if (mode == Mode.REV || op.univ == Univ.ADD) { openRevision(null, false); return }
         hint = false; screen = Screen.MEMO
         later(5000) { hint = true }
     }
@@ -166,8 +176,19 @@ class Game(private val speaker: Speaker, val ear: Ear, val progress: Progress) {
 
     /** Entraînement du jour : quelques cartes choisies par la répétition espacée. */
     fun startDaily() {
+        trainingDay = true; seriesTitle = "Entraînement du jour"
+        startSeries(progress.dailyPlan(op))
+    }
+
+    /** + et − : série de 15 calculs du niveau choisi. */
+    fun startLevel() {
+        trainingDay = false; seriesTitle = "${op.label} jusqu'à $addLevel"
+        startSeries(Series.additive(op, addLevel, progress))
+    }
+
+    private fun startSeries(list: List<Fact>) {
         cancelAll()
-        dailyList = progress.dailyPlan(op)
+        dailyList = list
         daily = true; bonus = false
         done.clear(); targets = dailyList.indices.toList()
         begin()
@@ -204,7 +225,7 @@ class Game(private val speaker: Speaker, val ear: Ear, val progress: Progress) {
         speaker.pitch = if (f.op.univ == Univ.ADD) 1.12f else 1.0f
         Earcon.play(f.op)
         later(Earcon.durationMs(f.op)) {
-            speaker.speak(Speech.question(f, dir)) { listen() }
+            speaker.speak(Speech.question(f, dirOf(f))) { listen() }
         }
     }
 
@@ -229,7 +250,7 @@ class Game(private val speaker: Speaker, val ear: Ear, val progress: Progress) {
             Answer.Command.PASS -> { pass(); return }
             null -> {}
         }
-        val r = Answer.check(text, fact(i), dir)
+        val r = Answer.check(text, fact(i), dirOf(fact(i)))
         reply(r.ok, r.said, SystemClock.elapsedRealtime() - listenStart < 6000)
     }
 
@@ -257,7 +278,7 @@ class Game(private val speaker: Speaker, val ear: Ear, val progress: Progress) {
             done[i] = Res.KO; said = saidText; revealed = true; phase = Phase.WRONG; streak = 0
             val cheer = Cheers.after(false, streak, doneCount(), targets.size)
             cheer?.let { showBanner(it) }
-            speaker.speak(Speech.wrong(f, dir) + (cheer?.let { " $it" } ?: "")) {
+            speaker.speak(Speech.wrong(f, dirOf(f)) + (cheer?.let { " $it" } ?: "")) {
                 later(900) { revealed = false; later(700) { next() } }
             }
         }
@@ -306,7 +327,10 @@ class Game(private val speaker: Speaker, val ear: Ear, val progress: Progress) {
         speaker.pitch = 1.0f
         if (daily) {
             screen = Screen.DAILY_END
-            speaker.speak("Entraînement terminé !. Tu as trouvé $s cartes sur ${dailyList.size}.. Reviens demain, ton cerveau range tes cartes pendant la nuit.") {}
+            speaker.speak(
+                if (trainingDay) "Entraînement terminé !. Tu as trouvé $s cartes sur ${dailyList.size}.. Reviens demain, ton cerveau range tes cartes pendant la nuit."
+                else "Série terminée !. Tu as trouvé $s calculs sur ${dailyList.size}."
+            ) {}
             return
         }
         screen = Screen.END

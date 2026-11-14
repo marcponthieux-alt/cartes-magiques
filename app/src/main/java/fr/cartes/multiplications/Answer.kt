@@ -124,7 +124,7 @@ object Answer {
         val ok = if (!f.op.inverse && dir == Dir.R2V) {
             pairs.any { Data.combine(f.op.univ, it.first, it.second) == f.v && it.first in 1..10 && it.second in 1..10 }
         } else {
-            val expected = if (f.op.inverse) f.a else f.v
+            val expected = if (f.op.inverse) f.b else f.v
             singles.lastOrNull() == expected
         }
         val said = toks.joinToString(" ") {

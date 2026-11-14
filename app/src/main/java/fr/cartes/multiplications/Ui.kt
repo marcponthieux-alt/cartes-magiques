@@ -2,6 +2,7 @@ package fr.cartes.multiplications
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -233,7 +234,7 @@ private fun CardFaces(f: Fact, rot: Float, fg: Color, icon: String?, k: Float = 
             if (icon != null) Text(icon, fontSize = (14 * k).sp)
             if (f.op.inverse) {
                 Text("${f.v}", fontSize = (25 * k).sp, lineHeight = (27 * k).sp, fontWeight = FontWeight.Bold, color = fg)
-                Text("${f.op.symbol} ${f.b}", fontSize = (18 * k).sp, lineHeight = (20 * k).sp, fontWeight = FontWeight.Bold, color = fg)
+                Text("${f.op.symbol} ${f.a}", fontSize = (18 * k).sp, lineHeight = (20 * k).sp, fontWeight = FontWeight.Bold, color = fg)
             } else {
                 Text("${f.v}", fontSize = (28 * k).sp, fontWeight = FontWeight.Bold, color = fg)
             }
@@ -247,13 +248,13 @@ private fun CardFaces(f: Fact, rot: Float, fg: Color, icon: String?, k: Float = 
             if (icon != null) Text(icon, fontSize = (12 * k).sp)
             if (f.op.inverse) {
                 Text(
-                    "${f.v} ${f.op.symbol} ${f.b} =", fontSize = (10 * k).sp, fontWeight = FontWeight.Medium,
+                    "${f.v} ${f.op.symbol} ${f.a} =", fontSize = (10 * k).sp, fontWeight = FontWeight.Medium,
                     color = fg, maxLines = 1, softWrap = false
                 )
-                Text("${f.a}", fontSize = (30 * k).sp, fontWeight = FontWeight.Bold, color = fg)
+                Text("${f.b}", fontSize = (30 * k).sp, fontWeight = FontWeight.Bold, color = fg)
             } else {
                 val s = f.op.tableSymbol
-                val all = Data.pairs(f.op.univ, f.v)
+                val all = if (f.a <= 10 && f.b <= 10) Data.pairs(f.op.univ, f.v) else listOf(f.a to f.b)
                 if (all.size <= 4) {
                     all.forEach { (a, b) -> CardLine("$a$s$b", a == f.a && b == f.b, fg, k) }
                 } else {
@@ -320,7 +321,8 @@ private fun Home(g: Game) {
             }
         }
         Text(
-            "${g.op.label} : touche la table pour choisir tes 25 cartes",
+            if (g.op.univ == Univ.ADD) "Touche la table pour réviser un carré de cartes"
+            else "${g.op.label} : touche la table pour choisir tes 25 cartes",
             fontSize = 14.sp, color = Sub, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center
         )
         BigTable(g, ver)
@@ -336,28 +338,44 @@ private fun Home(g: Game) {
                 fontSize = 13.sp, color = Color.White
             )
         }
-        Panel {
-            Text("Partie de 25 cartes : mon niveau", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Ink)
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Mode.entries.forEach { m ->
-                    ModeChip(m.label, m.sub, g.mode == m, Modifier.weight(1f)) { g.mode = m }
-                }
-            }
-            if (g.mode != Mode.REV && !g.op.inverse) {
-                Text("Je commence par", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Ink)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Dir.entries.forEach { d ->
-                        ModeChip(d.label, d.sub, g.dir == d, Modifier.weight(1f)) { g.dir = d }
+        if (g.op.univ == Univ.ADD) {
+            Panel {
+                Text("${g.op.label} : mon niveau", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Ink)
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf(10 to "Débutant", 20 to "Avancé", 100 to "Expert").forEach { (lv, name) ->
+                        ModeChip("Jusqu'à $lv", name, g.addLevel == lv, Modifier.weight(1f)) { g.addLevel = lv }
                     }
                 }
-            } else if (g.op.inverse && g.mode != Mode.REV) {
                 Text(
-                    "🔍 Le détective : trouve le nombre caché. " +
-                        if (g.op == Op.DIV) "24 ÷ 6 = ?  c'est  ? × 6 = 24" else "11 − 8 = ?  c'est  ? + 8 = 11",
+                    when (g.addLevel) {
+                        10 -> "Les résultats jusqu'à 10, à connaître par cœur."
+                        20 -> "Les résultats jusqu'à 20 : tout le répertoire à connaître par cœur."
+                        else -> "Calcul réfléchi jusqu'à 100 : dizaines, unités et passage de la dizaine."
+                    },
                     fontSize = 13.sp, color = Sub
                 )
-            } else {
-                Text("Révision : pas de voix ni de micro. Touche une carte pour la retourner.", fontSize = 13.sp, color = Sub)
+                BigButton("▶  Jouer : ${Series.SIZE} calculs", true, g.op.color) { g.startLevel() }
+            }
+        } else {
+            Panel {
+                Text("Partie de 25 cartes : mon niveau", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Ink)
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Mode.entries.forEach { m ->
+                        ModeChip(m.label, m.sub, g.mode == m, Modifier.weight(1f)) { g.mode = m }
+                    }
+                }
+                if (g.mode != Mode.REV && !g.op.inverse) {
+                    Text("Je commence par", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Ink)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Dir.entries.forEach { d ->
+                            ModeChip(d.label, d.sub, g.dir == d, Modifier.weight(1f)) { g.dir = d }
+                        }
+                    }
+                } else if (g.op.inverse && g.mode != Mode.REV) {
+                    Text("🔍 Le détective : trouve le nombre caché. 24 ÷ 6 = ?  c'est  6 × ? = 24", fontSize = 13.sp, color = Sub)
+                } else {
+                    Text("Révision : pas de voix ni de micro. Touche une carte pour la retourner.", fontSize = 13.sp, color = Sub)
+                }
             }
         }
         Row(
@@ -409,32 +427,33 @@ private fun ModeChip(label: String, sub: String, on: Boolean, modifier: Modifier
 private fun BigTable(g: Game, ver: Int) {
     val u = g.op.univ
     val known = remember(ver, g.op) {
-        (1..10).flatMap { r -> (1..10).map { c -> r to c } }
-            .filter { (r, c) -> g.progress.box(Fact(g.op, r, c)) >= 4 }.toSet()
+        (1..10).flatMap { x -> (1..10).map { y -> x to y } }
+            .filter { (x, y) -> g.progress.box(Fact(g.op, x, y)) >= 4 }.toSet()
     }
+    // Le 1 × 1 en bas à gauche, le 10 × 10 en haut à droite.
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        for (r in 0..10) {
-            if (r == 6) Spacer(Modifier.height(2.dp))
+        for (y in 10 downTo 0) {
+            if (y == 5) Spacer(Modifier.height(2.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                for (c in 0..10) {
-                    if (c == 6) Spacer(Modifier.width(2.dp))
-                    val mod = if (c == 0) Modifier.width(32.dp).height(30.dp) else Modifier.weight(1f).height(30.dp)
-                    if (r == 0 && c == 0) {
+                for (x in 0..10) {
+                    if (x == 6) Spacer(Modifier.width(2.dp))
+                    val mod = if (x == 0) Modifier.width(32.dp).height(30.dp) else Modifier.weight(1f).height(30.dp)
+                    if (x == 0 && y == 0) {
                         Box(mod.clip(RoundedCornerShape(5.dp)).background(g.op.color), contentAlignment = Alignment.Center) {
                             Text(g.op.tableSymbol, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
                         }
-                    } else if (r == 0 || c == 0) {
-                        HeadCell("${max(r, c)}", mod)
+                    } else if (x == 0 || y == 0) {
+                        HeadCell("${max(x, y)}", mod)
                     } else {
-                        val v = Data.combine(u, r, c)
-                        val q = (if (r >= 6) 2 else 0) + (if (c >= 6) 1 else 0)
+                        val v = Data.combine(u, x, y)
+                        val q = (if (y >= 6) 2 else 0) + (if (x >= 6) 1 else 0)
                         Box(
                             mod.clip(RoundedCornerShape(5.dp)).background(Data.bg(u, v)).whiteEdge(u, v, 5.dp)
                                 .clickable { g.openQuad(q) },
                             contentAlignment = Alignment.Center
                         ) {
                             Text("$v", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Data.fg(u, v))
-                            if ((r to c) in known) {
+                            if ((x to y) in known) {
                                 Text(
                                     "✓", fontSize = 8.sp, fontWeight = FontWeight.Bold, color = Data.fg(u, v),
                                     modifier = Modifier.align(Alignment.TopEnd).padding(end = 2.dp)
@@ -472,18 +491,11 @@ private fun Memo(g: Game) {
     ) {
         TopBar("Carré ${g.quad + 1} – regarde bien !", Data.range(g.quad), { g.goHome() }, null, g.op)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-            Row(Modifier.height(44.dp), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                Box(
-                    Modifier.width(44.dp).fillMaxHeight().clip(RoundedCornerShape(10.dp)).background(g.op.color),
-                    contentAlignment = Alignment.Center
-                ) { Text(g.op.tableSymbol, color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold) }
-                cols.forEach { HeadCell("$it", Modifier.weight(1f).fillMaxHeight(), 20.sp, 10.dp) }
-            }
-            rows.forEach { r ->
+            rows.reversed().forEach { r ->
                 Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                     HeadCell("$r", Modifier.width(44.dp).fillMaxHeight(), 20.sp, 10.dp)
                     cols.forEach { c ->
-                        val v = Data.combine(u, r, c)
+                        val v = Data.combine(u, c, r)
                         Box(
                             Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(12.dp))
                                 .background(Data.bg(u, v)).whiteEdge(u, v, 12.dp, 1.5.dp),
@@ -496,6 +508,13 @@ private fun Memo(g: Game) {
                         }
                     }
                 }
+            }
+            Row(Modifier.height(44.dp), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                Box(
+                    Modifier.width(44.dp).fillMaxHeight().clip(RoundedCornerShape(10.dp)).background(g.op.color),
+                    contentAlignment = Alignment.Center
+                ) { Text(g.op.tableSymbol, color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold) }
+                cols.forEach { HeadCell("$it", Modifier.weight(1f).fillMaxHeight(), 20.sp, 10.dp) }
             }
         }
         Row(
@@ -529,18 +548,18 @@ private fun RevisionScreen(g: Game) {
             Data.range(g.quad), { g.goHome() }, null, g.op
         )
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+            Data.rowsTopDown(g.quad).forEachIndexed { ri, r ->
+                Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                    HeadCell("$r", Modifier.width(36.dp).fillMaxHeight(), 17.sp, 9.dp)
+                    for (ci in 0..4) RevCard(g, ri * 5 + ci, Modifier.weight(1f).fillMaxHeight())
+                }
+            }
             Row(Modifier.height(36.dp), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                 Box(
                     Modifier.width(36.dp).fillMaxHeight().clip(RoundedCornerShape(9.dp)).background(g.op.color),
                     contentAlignment = Alignment.Center
                 ) { Text(g.op.tableSymbol, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold) }
                 cols.forEach { HeadCell("$it", Modifier.weight(1f).fillMaxHeight(), 17.sp, 9.dp) }
-            }
-            rows.forEachIndexed { ri, r ->
-                Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                    HeadCell("$r", Modifier.width(36.dp).fillMaxHeight(), 17.sp, 9.dp)
-                    for (ci in 0..4) RevCard(g, ri * 5 + ci, Modifier.weight(1f).fillMaxHeight())
-                }
             }
         }
         Text(
@@ -710,16 +729,17 @@ private fun VoicePanel(g: Game) {
     val f = i?.let { g.fact(it) }
     val q = when {
         f == null -> ""
-        f.op == Op.DIV -> "${f.v} ÷ ${f.b} = ?\nc'est : ? × ${f.b} = ${f.v}"
-        f.op == Op.SUB -> "${f.v} − ${f.b} = ?\nc'est : ? + ${f.b} = ${f.v}"
-        g.dir == Dir.R2V -> "${f.v} = ?"
+        f.op == Op.DIV -> "${f.v} ÷ ${f.a} = ?\nc'est : ${f.a} × ? = ${f.v}"
+        f.op == Op.SUB -> "${f.v} − ${f.a} = ?\nc'est : ${f.a} + ? = ${f.v}"
+        g.dirOf(f) == Dir.R2V -> "${f.v} = ?"
         else -> "${f.a} ${f.op.symbol} ${f.b} = ?"
     }
     val a = when {
         f == null -> ""
-        f.op.inverse -> "${f.v} ${f.op.symbol} ${f.b} = ${f.a}\n${f.a} ${f.op.tableSymbol} ${f.b} = ${f.v}"
+        f.op.inverse -> "${f.v} ${f.op.symbol} ${f.a} = ${f.b}\n${f.a} ${f.op.tableSymbol} ${f.b} = ${f.v}"
         else -> {
-            val others = Data.pairs(f.op.univ, f.v).filter { it != (f.a to f.b) }
+            val others = if (f.a > 10 || f.b > 10) emptyList()
+            else Data.pairs(f.op.univ, f.v).filter { it != (f.a to f.b) }
             "${f.a} ${f.op.symbol} ${f.b} = ${f.v}" +
                 if (others.isEmpty()) "" else "\naussi : " + others.joinToString(" · ") { "${it.first}${f.op.symbol}${it.second}" }
         }
@@ -783,7 +803,7 @@ private fun VoicePanel(g: Game) {
     }
 }
 
-/* ---------- Entraînement du jour ---------- */
+/* ---------- Entraînement du jour et séries ---------- */
 
 @Composable
 private fun DailyScreen(g: Game) {
@@ -795,20 +815,17 @@ private fun DailyScreen(g: Game) {
         Modifier.fillMaxSize().padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 14.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        TopBar(
-            "Entraînement du jour",
-            "Carte ${minOf(doneN + 1, n)} sur $n", { g.goHome() }, g.score, f?.op, n
-        )
+        TopBar(g.seriesTitle, "Calcul ${minOf(doneN + 1, n)} sur $n", { g.goHome() }, g.score, f?.op, n)
         Column(
             Modifier.weight(1f).fillMaxWidth(),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterVertically)
+            verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterVertically)
         ) {
             if (f != null && i != null) {
                 val reveal = g.done[i] == Res.OK || g.phase == Phase.RIGHT ||
                     ((g.phase == Phase.WRONG || g.phase == Phase.PASSED) && g.revealed)
-                MiniMap(f, g.questionIsBack(f), reveal)
-                CardView(g, i, true, Modifier.width(150.dp).height(210.dp), k = 1.9f, alwaysShown = true)
+                CardView(g, i, true, Modifier.width(92.dp).height(124.dp), k = 1.25f, alwaysShown = true)
+                if (f.op.univ == Univ.MUL) AreaMap(f, g.dirOf(f), reveal) else TenBars(f, reveal)
             } else {
                 Text("🧠", fontSize = 64.sp)
                 Text("Prêt ? On commence…", fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = Ink)
@@ -820,26 +837,144 @@ private fun DailyScreen(g: Game) {
 }
 
 /**
- * Petite carte du tableau 10 × 10 pour garder le repère de l'emplacement.
- * − et ÷ : seule la colonne est montrée tant que la réponse n'est pas trouvée (la ligne est la réponse).
+ * × et ÷ : le carré de 100 cartes, 1 × 1 en bas à gauche.
+ * Pendant la question : seulement les côtés connus (× : largeur et hauteur ; ÷ : largeur).
+ * À la réponse : le rectangle a × b garde ses couleurs, le reste devient gris.
+ * Ainsi l'enfant ne compte pas les cases : il cherche dans sa mémoire, puis voit la surface.
  */
 @Composable
-private fun MiniMap(f: Fact, opKnown: Boolean, reveal: Boolean) {
-    val u = f.op.univ
-    Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
-        for (r in 1..10) {
-            Row(horizontalArrangement = Arrangement.spacedBy(1.dp)) {
-                for (c in 1..10) {
-                    val here = r == f.a && c == f.b
-                    val color = when {
-                        here && (reveal || opKnown) -> Ink
-                        !reveal && f.op.inverse && c == f.b -> f.op.color.copy(alpha = 0.75f)
-                        else -> Data.bg(u, Data.combine(u, r, c)).copy(alpha = 0.5f)
+private fun AreaMap(f: Fact, dir: Dir, reveal: Boolean) {
+    val showSides = f.op.inverse || dir == Dir.V2R
+    Crossfade(targetState = reveal, animationSpec = tween(500), label = "aire") { rv ->
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            for (y in 10 downTo 1) {
+                Row(horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text("$y", fontSize = 9.sp, color = Sub, modifier = Modifier.width(14.dp), textAlign = TextAlign.End)
+                    for (x in 1..10) {
+                        val inRect = x <= f.a && y <= f.b
+                        val color = when {
+                            rv && inRect -> Data.bg(Univ.MUL, x * y)
+                            rv -> Grey.copy(alpha = 0.45f)
+                            showSides && y == 1 && x <= f.a -> f.op.color
+                            showSides && !f.op.inverse && x == 1 && y <= f.b -> f.op.color
+                            else -> Grey.copy(alpha = 0.35f)
+                        }
+                        val target = rv && x == f.a && y == f.b
+                        Box(
+                            Modifier.size(19.dp).clip(RoundedCornerShape(3.dp)).background(color)
+                                .then(if (target) Modifier.border(2.dp, Ink, RoundedCornerShape(3.dp)) else Modifier),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (target) Text("${f.v}", fontSize = 7.sp, fontWeight = FontWeight.Bold, color = Data.fg(Univ.MUL, f.v))
+                        }
                     }
-                    Box(Modifier.size(11.dp).clip(RoundedCornerShape(2.dp)).background(color))
                 }
             }
+            Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                Spacer(Modifier.width(14.dp))
+                for (x in 1..10) Text("$x", fontSize = 9.sp, color = Sub, modifier = Modifier.width(19.dp), textAlign = TextAlign.Center)
+            }
         }
+    }
+}
+
+/** Une colonne de 10 cases, remplie de bas en haut. cells[0] = case du bas. */
+@Composable
+private fun BarColumn(cells: List<Color?>, labels: Map<Int, String> = emptyMap(), crossed: Set<Int> = emptySet()) {
+    Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+        for (k in 9 downTo 0) {
+            val c = cells.getOrNull(k)
+            Box(
+                Modifier.width(23.dp).height(14.dp).clip(RoundedCornerShape(2.dp))
+                    .background(c ?: Color.White)
+                    .border(1.dp, if (c == null) Line else c.copy(alpha = 0f), RoundedCornerShape(2.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                labels[k]?.let { Text(it, fontSize = 8.sp, fontWeight = FontWeight.Bold, color = Ink, maxLines = 1, softWrap = false) }
+                if (k in crossed) Text("×", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Faint)
+            }
+        }
+    }
+}
+
+/** Colonnes d'un bloc de cases numérotées 1..n (de bas en haut, de gauche à droite). */
+private fun blockColumns(n: Int, columns: Int, color: (Int) -> Color?): List<List<Color?>> =
+    (0 until columns).map { c -> (0..9).map { r -> val k = c * 10 + r + 1; if (k <= n) color(k) else null } }
+
+/**
+ * + et − : les bâtons de dizaines (10 bâtons de 10 cases = 100).
+ * + pendant la question : les deux nombres séparés, dizaines sur les côtés, unités au centre.
+ * + à la réponse : fusion en un seul bloc ; les cases du 2e nombre complètent d'abord la dizaine.
+ * − : on part du grand nombre ; à la réponse, les cases retirées s'effacent par le haut.
+ */
+@Composable
+private fun TenBars(f: Fact, reveal: Boolean) {
+    val p by animateFloatAsState(if (reveal) 1f else 0f, tween(1300), label = "fusion")
+    val ca = Data.COLOR_A
+    val cb = Data.COLOR_B
+    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        if (f.op == Op.ADD) {
+            val a = f.a; val b = f.b
+            if (!reveal) {
+                Row(horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.Bottom) {
+                    repeat(a / 10) { BarColumn(List(10) { ca }) }
+                    if (a % 10 > 0) BarColumn(List(a % 10) { ca }, mapOf((a % 10 - 1) to "$a"))
+                    Spacer(Modifier.width(14.dp))
+                    if (b % 10 > 0) BarColumn(List(b % 10) { cb }, mapOf((b % 10 - 1) to "$b"))
+                    repeat(b / 10) { BarColumn(List(10) { cb }) }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Text("$a", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = ca)
+                    Text("+", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = f.op.color)
+                    Text("$b", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = cb)
+                }
+            } else {
+                val n = a + b
+                val shown = a + (p * b).toInt()
+                val cols = blockColumns(n, 10) { k -> if (k > shown) null else if (k <= a) ca else cb }
+                Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                    cols.forEachIndexed { c, cells ->
+                        val lastIdx = if ((n - 1) / 10 == c && shown >= n) (n - 1) % 10 else -1
+                        BarColumn(cells, if (lastIdx >= 0) mapOf(lastIdx to "$n") else emptyMap())
+                    }
+                }
+                ResultBadge(f, n)
+            }
+        } else {
+            // Soustraction v − a = b
+            val v = f.v; val a = f.a; val b = f.b
+            val removed = if (reveal) (p * a).toInt() else 0
+            val cols = blockColumns(v, 10) { k ->
+                when {
+                    !reveal -> ca // pendant la question : un seul bloc, rien n'est dévoilé
+                    k > v - removed -> Grey.copy(alpha = 0.5f)
+                    k <= b -> ca
+                    else -> cb
+                }
+            }
+            val crossed = (v - removed + 1)..v
+            Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                cols.forEachIndexed { c, cells ->
+                    val marks = crossed.filter { (it - 1) / 10 == c }.map { (it - 1) % 10 }.toSet()
+                    val labelK = if (reveal && removed >= a) b else v
+                    val lab = if ((labelK - 1) / 10 == c) mapOf((labelK - 1) % 10 to "$labelK") else emptyMap()
+                    BarColumn(cells, lab, marks)
+                }
+            }
+            if (reveal) ResultBadge(f, b) else Text(
+                "$v − $a", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = f.op.color
+            )
+        }
+    }
+}
+
+@Composable
+private fun ResultBadge(f: Fact, n: Int) {
+    Box(
+        Modifier.clip(RoundedCornerShape(12.dp)).background(Data.bg(Univ.ADD, n)).padding(horizontal = 14.dp, vertical = 4.dp)
+    ) {
+        val txt = if (f.op == Op.ADD) "${f.a} + ${f.b} = $n" else "${f.v} − ${f.a} = $n"
+        Text(txt, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Ink)
     }
 }
 
@@ -853,7 +988,7 @@ private fun DailyEnd(g: Game) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        Text("Entraînement du jour terminé", fontSize = 15.sp, color = Sub)
+        Text("${g.seriesTitle} : terminé", fontSize = 15.sp, color = Sub)
         Text(
             if (s == n) "Parfait !" else if (s * 10 >= n * 7) "Bravo !" else "Bien joué !",
             fontSize = 44.sp, fontWeight = FontWeight.Bold, color = Ink
@@ -873,7 +1008,7 @@ private fun DailyEnd(g: Game) {
                             verticalArrangement = Arrangement.Center
                         ) {
                             Text(if (ok) Data.icon(u, f.v) else "?", fontSize = 24.sp, color = Faint)
-                            val txt = if (f.op.inverse) "${f.v}${f.op.symbol}${f.b}=${f.a}" else "${f.a}${f.op.symbol}${f.b}=${f.v}"
+                            val txt = if (f.op.inverse) "${f.v}${f.op.symbol}${f.a}=${f.b}" else "${f.a}${f.op.symbol}${f.b}=${f.v}"
                             Text(txt, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = if (ok) Data.fg(u, f.v) else Faint, maxLines = 1)
                         }
                     }
@@ -897,7 +1032,7 @@ private fun DailyEnd(g: Game) {
                 }
             }
         }
-        Text(
+        if (g.trainingDay) Text(
             "🌙 Reviens demain : pendant la nuit, ton cerveau range tes cartes.",
             fontSize = 15.sp, color = Sub, textAlign = TextAlign.Center
         )
@@ -979,19 +1114,12 @@ private fun EndScreen(g: Game) {
         )
         Text("⭐ $s bons points sur 25", fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = Ink)
         Panel(pad = PaddingValues(12.dp), gap = 6.dp) {
-            Row(Modifier.height(32.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Box(
-                    Modifier.width(32.dp).fillMaxHeight().clip(RoundedCornerShape(8.dp)).background(g.op.color),
-                    contentAlignment = Alignment.Center
-                ) { Text(g.op.tableSymbol, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold) }
-                cols.forEach { HeadCell("$it", Modifier.weight(1f).fillMaxHeight(), 15.sp, 8.dp) }
-            }
-            rows.forEachIndexed { ri, r ->
+            rows.reversed().forEachIndexed { ri, r ->
                 Row(Modifier.height(76.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     HeadCell("$r", Modifier.width(32.dp).fillMaxHeight(), 15.sp, 8.dp)
                     cols.forEachIndexed { ci, c ->
                         val i = ri * 5 + ci
-                        val v = Data.combine(u, r, c)
+                        val v = Data.combine(u, c, r)
                         val ok = g.done[i] == Res.OK
                         Column(
                             Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(14.dp))
@@ -1005,6 +1133,13 @@ private fun EndScreen(g: Game) {
                         }
                     }
                 }
+            }
+            Row(Modifier.height(32.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Box(
+                    Modifier.width(32.dp).fillMaxHeight().clip(RoundedCornerShape(8.dp)).background(g.op.color),
+                    contentAlignment = Alignment.Center
+                ) { Text(g.op.tableSymbol, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold) }
+                cols.forEach { HeadCell("$it", Modifier.weight(1f).fillMaxHeight(), 15.sp, 8.dp) }
             }
         }
         if (miss > 0) {

@@ -34,6 +34,7 @@ class Progress(ctx: Context) {
     private fun due(f: Fact): Long = p.getLong("d_${f.key}", 0L)
 
     fun record(f: Fact, ok: Boolean, fast: Boolean) {
+        if (f.a > 10 || f.b > 10) return // calcul réfléchi (jusqu'à 100) : pas de suivi carte par carte
         val old = box(f)
         val nb = when {
             !ok -> 1
