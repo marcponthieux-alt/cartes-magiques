@@ -56,14 +56,22 @@ object Data {
 
 /** Textes lus par le haut-parleur. Un point « . » = un temps de silence. */
 object Speech {
-    fun question(dir: Dir, v: Int): String =
-        if (dir == Dir.R2V) "$v égale ?"
-        else Data.prods(v).joinToString(", ") { "${it.first} fois ${it.second}" } + ", égale ?"
+    /**
+     * Face résultat : « 24 égale ? ».
+     * Face multiplication : seule la ligne de l'emplacement de la carte (en gras) est lue,
+     * par exemple « 4 fois 6, égale ? » pour la carte ligne 4, colonne 6.
+     */
+    fun question(dir: Dir, q: Int, i: Int): String {
+        val v = Data.value(q, i)
+        if (dir == Dir.R2V) return "$v égale ?"
+        val (a, b) = Data.geo(q, i)
+        return "$a fois $b, égale ?"
+    }
 
     fun answer(v: Int): String =
         Data.prods(v).joinToString(" ") { "${it.first} fois ${it.second}.. $v..." }
 
     fun right(v: Int): String = "Bravo. " + answer(v)
 
-    fun wrong(dir: Dir, v: Int): String = question(dir, v) + "... " + answer(v)
+    fun wrong(dir: Dir, q: Int, i: Int): String = question(dir, q, i) + "... " + answer(Data.value(q, i))
 }

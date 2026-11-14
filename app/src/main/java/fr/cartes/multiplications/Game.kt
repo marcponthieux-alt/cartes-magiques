@@ -79,7 +79,7 @@ class Game(private val speaker: Speaker, val ear: Ear) {
     private fun ask(i: Int) {
         h.removeCallbacksAndMessages(null); ear.stop()
         sel = i; phase = Phase.ASK; said = null; revealed = false
-        speaker.speak(Speech.question(dir, Data.value(quad, i))) { listen() }
+        speaker.speak(Speech.question(dir, quad, i)) { listen() }
     }
 
     fun repeatQuestion() { val i = sel ?: return; if (phase == Phase.LISTEN) ask(i) }
@@ -116,7 +116,7 @@ class Game(private val speaker: Speaker, val ear: Ear) {
             speaker.speak(Speech.right(v)) { later(500) { next() } }
         } else {
             done[i] = false; said = saidText; revealed = true; phase = Phase.WRONG
-            speaker.speak(Speech.wrong(dir, v)) {
+            speaker.speak(Speech.wrong(dir, quad, i)) {
                 later(900) { revealed = false; later(700) { next() } }
             }
         }
