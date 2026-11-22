@@ -44,12 +44,13 @@ object Answer {
     val GRAMMAR: String by lazy {
         val phrases = LinkedHashSet<String>()
         for (n in 0..100) { val w = fr(n); phrases += w; phrases += w.replace('-', ' ') }
-        for (a in 1..10) for (b in 1..10) {
-            phrases += "${fr(a)} fois ${fr(b)}"
+        for (a in 0..10) for (b in 0..10) {
+            if (a > 0 && b > 0) phrases += "${fr(a)} fois ${fr(b)}"
             phrases += "${fr(a)} plus ${fr(b)}"
         }
         phrases += "égale"; phrases += "moins"; phrases += "divisé par"
         phrases += "pause"; phrases += "je passe"; phrases += "passe"
+        phrases += "indice"; phrases += "aide"; phrases += "j'ai fini"
         val arr = JSONArray()
         phrases.forEach { arr.put(it) }
         arr.put("[unk]")
@@ -89,14 +90,28 @@ object Answer {
         return out
     }
 
-    enum class Command { PAUSE, PASS }
+    enum class Command { PAUSE, PASS, HINT }
 
     /** Mots de commande reconnus au micro : « pause » et « je passe ». */
     fun command(text: String): Command? {
         val t = text.lowercase()
         if (Regex("\\bpause\\b").containsMatchIn(t)) return Command.PAUSE
         if (Regex("\\bpass(e|er|es)?\\b").containsMatchIn(t)) return Command.PASS
+        if (Regex("\\b(indice|aide)\\b").containsMatchIn(t)) return Command.HINT
         return null
+    }
+
+    /** Toutes les additions dites dans la phrase : « huit plus un, sept plus deux » → (8,1), (7,2). */
+    fun additions(text: String): List<Pair<Int, Int>> {
+        val toks = parse(text)
+        val out = mutableListOf<Pair<Int, Int>>()
+        for (k in 1 until toks.lastIndex) {
+            if (toks[k] == Tok.P) {
+                val a = toks[k - 1]; val b = toks[k + 1]
+                if (a is Tok.N && b is Tok.N) out += a.n to b.n
+            }
+        }
+        return out
     }
 
     data class Result(val ok: Boolean, val said: String)

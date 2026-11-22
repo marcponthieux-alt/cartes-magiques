@@ -20,6 +20,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -100,6 +101,7 @@ fun App(g: Game) {
                     Screen.END -> EndScreen(g)
                     Screen.REVISION -> RevisionScreen(g)
                     Screen.DAILY_END -> DailyEnd(g)
+                    Screen.SUMS -> SumsScreen(g)
                 }
                 AnimatedVisibility(
                     visible = g.bannerOn && g.screen == Screen.GAME,
@@ -116,7 +118,7 @@ fun App(g: Game) {
                     }
                 }
                 Celebration(g)
-                if (g.gamePaused && g.screen == Screen.GAME) PauseOverlay(g)
+                if (g.gamePaused && (g.screen == Screen.GAME || g.screen == Screen.SUMS)) PauseOverlay(g)
             }
             BackHandler(enabled = g.screen != Screen.HOME) { g.goHome() }
         }
@@ -337,7 +339,10 @@ private fun Home(g: Game) {
                         ModeChip("Jusqu'à $lv", name, g.addLevel == lv, Modifier.weight(1f)) { g.addLevel = lv }
                     }
                 }
-                BigButton("▶  Jouer : ${Series.SIZE} calculs", true, g.op.color) { g.startLevel() }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SmallButton("▶  ${Series.SIZE} calculs", g.op.color, g.op.color, Color.White, Modifier.weight(1f)) { g.startLevel() }
+                    SmallButton("🏠  Sommes égales", Color.White, Op.ADD.color, Op.ADD.color, Modifier.weight(1f)) { g.openSums() }
+                }
             } else {
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Mode.entries.forEach { m ->
@@ -1048,8 +1053,8 @@ private fun Celebration(g: Game) {
             ) {
                 Text("⭐ 🌟 ✨ 🌟 ⭐", fontSize = 26.sp)
                 Text(g.celebrateIcon, fontSize = 84.sp)
-                Text("Erreur corrigée !", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Ink)
-                Text("+1 bon point récupéré", fontSize = 16.sp, color = Sub)
+                Text(g.celebrateTitle, fontSize = 26.sp, fontWeight = FontWeight.Bold, color = Ink, textAlign = TextAlign.Center)
+                Text(g.celebrateSub, fontSize = 16.sp, color = Sub, textAlign = TextAlign.Center)
                 Text("✨ 🎉 ✨", fontSize = 26.sp)
             }
         }
@@ -1114,5 +1119,159 @@ private fun EndScreen(g: Game) {
         }
         BigButton("Rejouer ce carré", miss == 0) { g.replay() }
         BigButton("Retour à l'accueil", false) { g.goHome() }
+    }
+}
+
+
+/* ---------- Les sommes égales ---------- */
+
+/**
+ * Jeu des sommes égales, disposé comme la fiche de classe :
+ * une ligne par addition (le plus grand nombre d'abord), son jumeau à droite, le double seul en bas.
+ * Sous chaque addition trouvée, n cubes : la partie orange et la partie bleue changent, le total reste le même.
+ */
+@Composable
+private fun SumsScreen(g: Game) {
+    val n = g.sumTarget
+    val ver = g.progress.version
+    val listening = g.sumListening && !g.sumDone
+    val inf = rememberInfiniteTransition(label = "sumPulse")
+    val p by inf.animateFloat(0f, 1f, infiniteRepeatable(tween(650), RepeatMode.Reverse), label = "sp")
+    Column(
+        Modifier.fillMaxSize().padding(horizontal = 14.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        TopBar("Les sommes égales", "Trouvées : ${g.sumCount} sur ${g.sumTotal}", { g.goHome() }, null, Op.ADD)
+        // Choix du nombre (étoiles = meilleur résultat, ✓ = bien su)
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+            g.progress.SUM_TARGETS.forEach { t ->
+                val on = t == n
+                val stars = remember(ver, t) { g.progress.bestStars(t) }
+                val known = remember(ver, t) { g.progress.sumMastered(t) }
+                Column(
+                    Modifier.width(40.dp).height(46.dp).clip(RoundedCornerShape(10.dp))
+                        .background(if (on) Op.ADD.color else Color.White)
+                        .border(2.dp, if (on) Op.ADD.color else Line, RoundedCornerShape(10.dp))
+                        .clickable { g.startSums(t) },
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Text("$t", fontSize = 16.sp, lineHeight = 17.sp, fontWeight = FontWeight.Bold, color = if (on) Color.White else Ink)
+                    Text(
+                        if (known) "✓" else "★".repeat(stars).ifEmpty { "·" },
+                        fontSize = 9.sp, lineHeight = 10.sp, color = if (on) Color.White else Color(0xFFB07D00)
+                    )
+                }
+            }
+        }
+        // Le nombre cible
+        Row(
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Color.White).padding(vertical = 6.dp),
+            horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("Les sommes égales à ", fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = Ink)
+            Box(
+                Modifier.clip(RoundedCornerShape(12.dp)).background(Data.bg(Univ.ADD, n)).padding(horizontal = 14.dp, vertical = 2.dp)
+            ) { Text("$n", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Ink) }
+        }
+        // Les cases, comme sur la fiche
+        Column(Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterVertically)) {
+            g.sumRows(n).forEach { (a, b) ->
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    SumSlot(g, a to b, Modifier.weight(1f))
+                    if (a != b) SumSlot(g, b to a, Modifier.weight(1f))
+                }
+            }
+            if (g.sumDone) {
+                Text(
+                    "Tu vois ? Quand un nombre perd 1, l'autre gagne 1 : la somme ne change pas.",
+                    fontSize = 13.sp, color = Sub, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()
+                )
+            } else if (g.sumCount == 0) {
+                Text(
+                    "Astuce : commence par 9 + …, puis 8 + …, puis 7 + …",
+                    fontSize = 13.sp, color = Sub, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()
+                )
+            }
+        }
+        // Le micro et les boutons
+        Panel(pad = PaddingValues(12.dp), gap = 8.dp) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Box(
+                    Modifier.size(40.dp)
+                        .drawBehind {
+                            if (listening) drawCircle(Ink.copy(alpha = 0.18f), radius = size.minDimension / 2 + p * 8.dp.toPx())
+                        }
+                        .clip(CircleShape).background(if (listening) Ink else Chip),
+                    contentAlignment = Alignment.Center
+                ) { Text(if (g.sumDone) "⭐" else if (listening) "🎤" else "🔊", fontSize = 19.sp) }
+                Text(g.sumMsg, fontSize = 15.sp, lineHeight = 19.sp, color = Ink, modifier = Modifier.weight(1f))
+            }
+            if (!g.ear.usable && !g.sumDone) {
+                Text("Micro indisponible : touche une case pour la montrer.", fontSize = 11.sp, color = Sub)
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (g.sumDone) {
+                    SmallButton("🔁  Rejouer", Chip, Line, Ink, Modifier.weight(1f)) { g.startSums(n) }
+                    SmallButton("▶  Suivant", Op.ADD.color, Op.ADD.color, Color.White, Modifier.weight(1f)) { g.sumNext() }
+                } else {
+                    SmallButton("💡 Indice", Chip, Line, Ink, Modifier.weight(1f)) { g.sumGiveHint() }
+                    SmallButton("⏸ Pause", Chip, Line, Ink, Modifier.weight(1f)) { g.pauseGame() }
+                    SmallButton("⏭ Fini", Chip, Line, Ink, Modifier.weight(1f)) { g.sumGiveUp() }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SumSlot(g: Game, pair: Pair<Int, Int>, modifier: Modifier) {
+    val (a, b) = pair
+    val n = a + b
+    val state = g.sumFound[pair]
+    val hint = g.sumHint == pair
+    val flash = g.sumFlash == pair
+    val sc by animateFloatAsState(if (flash && state != null) 1.06f else 1f, label = "slot")
+    val shape = RoundedCornerShape(12.dp)
+    val base = modifier.height(52.dp).graphicsLayer { scaleX = sc; scaleY = sc }
+    when {
+        state == null -> Box(
+            base.clip(shape).background(if (hint) Color(0xFFFFF4C2) else Color.White.copy(alpha = 0.6f))
+                .then(if (hint) Modifier.border(2.dp, Sun, shape) else Modifier.dashedOver(Edge))
+                .clickable(enabled = !g.ear.usable && !g.sumDone) { g.sumReveal(pair) },
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                if (hint) "$a + ?" else "? + ?", fontSize = 18.sp, fontWeight = FontWeight.SemiBold,
+                color = if (hint) Ink else Edge
+            )
+        }
+        else -> {
+            val found = state
+            val ca = if (found) Data.COLOR_A else GreyInk
+            val cb = if (found) Data.COLOR_B else Grey
+            Column(
+                base.clip(shape).background(Color.White)
+                    .border(2.dp, if (found) Op.ADD.color else Line, shape)
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.SpaceEvenly
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("$a", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = ca)
+                    Text(" + ", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = if (found) Ink else GreyInk)
+                    Text("$b", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = cb)
+                }
+                // n cubes : a orange puis b bleus
+                Row(Modifier.fillMaxWidth().height(8.dp), horizontalArrangement = Arrangement.spacedBy(1.dp)) {
+                    for (k in 1..n) {
+                        Box(
+                            Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(1.dp))
+                                .background(if (k <= a) ca else cb)
+                        )
+                    }
+                }
+            }
+        }
     }
 }

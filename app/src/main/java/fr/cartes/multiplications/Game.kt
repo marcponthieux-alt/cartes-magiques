@@ -9,7 +9,7 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 
-enum class Screen { HOME, MEMO, GAME, END, REVISION, DAILY_END }
+enum class Screen { HOME, MEMO, GAME, END, REVISION, DAILY_END, SUMS }
 
 enum class Mode(val label: String, val sub: String) {
     REV("Révision", "Je regarde les cartes"),
@@ -67,6 +67,22 @@ class Game(private val speaker: Speaker, val ear: Ear, val progress: Progress) {
     var bannerText by mutableStateOf("")
     var celebrateOn by mutableStateOf(false)
     var celebrateIcon by mutableStateOf("")
+    var celebrateTitle by mutableStateOf("Erreur corrigée !")
+    var celebrateSub by mutableStateOf("+1 bon point récupéré")
+
+    /* ----- Les sommes égales ----- */
+    var sumTarget by mutableIntStateOf(9)
+    /** (a, b) -> true : trouvée par l'enfant ; false : révélée (indice refusé ou « je passe »). */
+    val sumFound = mutableStateMapOf<Pair<Int, Int>, Boolean>()
+    var sumHint by mutableStateOf<Pair<Int, Int>?>(null)
+    var sumFlash by mutableStateOf<Pair<Int, Int>?>(null)
+    var sumMsg by mutableStateOf("")
+    var sumListening by mutableStateOf(false)
+    var sumDone by mutableStateOf(false)
+    var sumStars by mutableIntStateOf(0)
+    private var sumHints = 0
+    private var sumErrors = 0
+    private var sumStart = 0L
 
     // Mode révision
     var revOnly by mutableStateOf<Set<Int>?>(null)
@@ -105,8 +121,8 @@ class Game(private val speaker: Speaker, val ear: Ear, val progress: Progress) {
         ui.postDelayed({ if (bannerText == t) bannerOn = false }, 2600)
     }
 
-    private fun showCelebrate(icon: String) {
-        celebrateIcon = icon; celebrateOn = true
+    private fun showCelebrate(icon: String, title: String = "Erreur corrigée !", sub: String = "+1 bon point récupéré") {
+        celebrateIcon = icon; celebrateTitle = title; celebrateSub = sub; celebrateOn = true
         ui.postDelayed({ celebrateOn = false }, 1900)
     }
 
@@ -248,6 +264,7 @@ class Game(private val speaker: Speaker, val ear: Ear, val progress: Progress) {
         when (Answer.command(text)) {
             Answer.Command.PAUSE -> { pauseGame(); return }
             Answer.Command.PASS -> { pass(); return }
+            Answer.Command.HINT -> { ask(i); return }
             null -> {}
         }
         val r = Answer.check(text, fact(i), dirOf(fact(i)))
@@ -298,7 +315,7 @@ class Game(private val speaker: Speaker, val ear: Ear, val progress: Progress) {
     }
 
     fun pauseGame() {
-        if (screen != Screen.GAME) return
+        if (screen != Screen.GAME && screen != Screen.SUMS) return
         gamePaused = true
         h.removeCallbacksAndMessages(null); ear.stop(); speaker.stop()
     }
@@ -306,6 +323,7 @@ class Game(private val speaker: Speaker, val ear: Ear, val progress: Progress) {
     fun resumeGame() {
         if (!gamePaused) return
         gamePaused = false
+        if (screen == Screen.SUMS) { sumListening = false; sumListen(); return }
         when (phase) {
             Phase.ASK, Phase.LISTEN -> sel?.let { ask(it) }
             Phase.RIGHT, Phase.WRONG, Phase.PASSED -> { revealed = false; next() }
@@ -347,7 +365,7 @@ class Game(private val speaker: Speaker, val ear: Ear, val progress: Progress) {
     /** L'application passe en arrière-plan. */
     fun pause() {
         bgPaused = true
-        if (screen == Screen.GAME) pauseGame()
+        if (screen == Screen.GAME || screen == Screen.SUMS) pauseGame()
         else { h.removeCallbacksAndMessages(null); ear.stop(); speaker.stop() }
     }
 
@@ -357,6 +375,151 @@ class Game(private val speaker: Speaker, val ear: Ear, val progress: Progress) {
         bgPaused = false
         if (screen == Screen.MEMO) hint = true
     }
+
+    /* ---------- Les sommes égales ---------- */
+
+    /** Toutes les additions a + b = n avec a et b de 0 à 9. */
+    fun sumPairs(n: Int): List<Pair<Int, Int>> =
+        (0..9).flatMap { a -> (0..9).filter { b -> a + b == n }.map { b -> a to b } }
+
+    /** Lignes de la fiche : (a, b) avec a ≥ b, du plus grand a au plus petit ; le jumeau (b, a) est à droite. */
+    fun sumRows(n: Int): List<Pair<Int, Int>> =
+        sumPairs(n).filter { it.first >= it.second }.sortedByDescending { it.first }
+
+    val sumTotal: Int get() = sumPairs(sumTarget).size
+    val sumCount: Int get() = sumFound.size
+
+    fun openSums() = startSums(progress.nextSum())
+
+    fun startSums(n: Int) {
+        cancelAll(); ui.removeCallbacksAndMessages(null)
+        bannerOn = false; celebrateOn = false; gamePaused = false; daily = false
+        sumTarget = n; sumFound.clear(); sumHint = null; sumFlash = null
+        sumDone = false; sumStars = 0; sumHints = 0; sumErrors = 0; sumListening = false
+        sumStart = SystemClock.elapsedRealtime()
+        sumMsg = "Trouve toutes les additions qui font $n."
+        screen = Screen.SUMS
+        speaker.pitch = 1.12f
+        Earcon.play(Op.ADD)
+        later(Earcon.durationMs(Op.ADD)) {
+            speaker.speak("Les sommes égales à $n ?") { sumListen() }
+        }
+    }
+
+    private fun sumListen() {
+        if (screen != Screen.SUMS || sumDone || gamePaused) return
+        sumListening = true
+        if (!ear.usable) return // les cases se touchent pour être révélées (adulte)
+        ear.listen { t -> sumHeard(t) }
+        // Pas de réponse pendant 15 secondes : un indice, dans l'ordre de la fiche.
+        later(15000) { if (sumListening && !sumDone && !gamePaused) { ear.stop(); sumGiveHint() } }
+    }
+
+    private fun sumHeard(text: String) {
+        if (screen != Screen.SUMS || sumDone || gamePaused) return
+        h.removeCallbacksAndMessages(null)
+        sumListening = false
+        when (Answer.command(text)) {
+            Answer.Command.PAUSE -> { pauseGame(); return }
+            Answer.Command.PASS -> { sumGiveUp(); return }
+            Answer.Command.HINT -> { sumGiveHint(); return }
+            null -> {}
+        }
+        val n = sumTarget
+        val pairs = Answer.additions(text)
+        if (pairs.isEmpty()) {
+            sumMsg = "Dis une addition, par exemple « 4 plus 5 »."
+            speaker.speak("Dis une addition.") { sumListen() }
+            return
+        }
+        val talk = StringBuilder()
+        var anyNew = false
+        for ((a, b) in pairs) {
+            when {
+                a + b != n || a !in 0..9 || b !in 0..9 -> {
+                    sumErrors++
+                    sumMsg = "$a + $b = ${a + b}, ce n'est pas $n."
+                    talk.append("$a plus $b.. égale ${a + b}... ")
+                }
+                sumFound.containsKey(a to b) -> {
+                    sumFlash = a to b
+                    sumMsg = "$a + $b : déjà trouvée !"
+                    talk.append("Déjà trouvée... ")
+                }
+                else -> {
+                    anyNew = true
+                    sumFound[a to b] = true
+                    sumFlash = a to b
+                    if (a != b && !sumFound.containsKey(b to a)) {
+                        sumFound[b to a] = true
+                        talk.append("Oui !. $a plus $b.. et son jumeau, $b plus $a... ")
+                    } else {
+                        talk.append("Oui !. $a plus $b... ")
+                    }
+                    if (sumHint == (a to b) || sumHint == (b to a)) sumHint = null
+                }
+            }
+        }
+        val left = sumTotal - sumCount
+        if (anyNew) sumMsg = if (left > 0) "Bravo ! Encore $left à trouver." else "Bravo !"
+        if (left == 0) { speaker.speak(talk.toString()) { sumFinish() }; return }
+        speaker.speak(talk.toString()) { sumListen() }
+    }
+
+    /** Indice : la première somme manquante dans l'ordre de la fiche (9 + …, puis 8 + …). */
+    fun sumGiveHint() {
+        if (screen != Screen.SUMS || sumDone) return
+        h.removeCallbacksAndMessages(null); ear.stop(); speaker.stop()
+        val next = sumRows(sumTarget).firstOrNull { !sumFound.containsKey(it) } ?: return
+        sumHints++
+        sumHint = next
+        sumMsg = "Indice : ${next.first} + ? = $sumTarget"
+        sumListening = false
+        speaker.speak("${next.first} plus combien ?") { sumListen() }
+    }
+
+    /** « Je passe » ou « Fini » : les sommes manquantes s'affichent en gris. */
+    fun sumGiveUp() {
+        if (screen != Screen.SUMS || sumDone) return
+        h.removeCallbacksAndMessages(null); ear.stop(); speaker.stop()
+        sumPairs(sumTarget).forEach { if (!sumFound.containsKey(it)) sumFound[it] = false }
+        sumHint = null
+        sumFinish()
+    }
+
+    /** Sans micro : un adulte touche une case pour la révéler. */
+    fun sumReveal(pair: Pair<Int, Int>) {
+        if (screen != Screen.SUMS || sumDone || ear.usable || sumFound.containsKey(pair)) return
+        sumFound[pair] = true
+        val twin = pair.second to pair.first
+        if (!sumFound.containsKey(twin)) sumFound[twin] = true
+        if (sumCount == sumTotal) sumFinish()
+    }
+
+    private fun sumFinish() {
+        sumDone = true; sumListening = false
+        val n = sumTarget
+        val revealed = sumFound.values.count { !it }
+        sumStars = when {
+            revealed > 0 -> if (sumCount - revealed > 0) 1 else 0
+            sumHints == 0 && sumErrors <= 1 -> 3
+            sumHints <= 1 -> 2
+            else -> 1
+        }
+        val elapsed = SystemClock.elapsedRealtime() - sumStart
+        progress.recordSum(n, sumStars, elapsed < sumTotal * 9000L)
+        sumMsg = if (revealed > 0) "Les sommes en gris sont à retenir. On rejoue bientôt !"
+        else "Tu as trouvé les $sumTotal sommes égales à $n !"
+        if (revealed == 0) {
+            showCelebrate("⭐".repeat(maxOf(1, sumStars)), "Les $sumTotal sommes égales à $n !",
+                if (sumStars == 3) "Sans aide, bravo !" else "Bravo, tu les as toutes trouvées !")
+            speaker.speak("Bravo !. Tu as trouvé les $sumTotal sommes égales à $n !") {}
+        } else {
+            speaker.speak("Voici toutes les sommes égales à $n.") {}
+        }
+    }
+
+    fun sumNext() = startSums(progress.nextSum().let { if (it == sumTarget && sumStars >= 2) (it % 18) + 1 else it }.coerceIn(4, 18))
 
     fun release() { cancelAll(); ui.removeCallbacksAndMessages(null); speaker.release() }
 }

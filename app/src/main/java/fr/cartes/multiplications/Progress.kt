@@ -30,20 +30,49 @@ class Progress(ctx: Context) {
 
     private fun today(): Long = System.currentTimeMillis() / 86_400_000L
 
-    fun box(f: Fact): Int = p.getInt("b_${f.key}", 0)
-    private fun due(f: Fact): Long = p.getLong("d_${f.key}", 0L)
+    fun box(f: Fact): Int = boxKey(f.key)
+    private fun due(f: Fact): Long = dueKey(f.key)
+    private fun boxKey(k: String): Int = p.getInt("b_$k", 0)
+    private fun dueKey(k: String): Long = p.getLong("d_$k", 0L)
 
     fun record(f: Fact, ok: Boolean, fast: Boolean) {
         if (f.a > 10 || f.b > 10) return // calcul réfléchi (jusqu'à 100) : pas de suivi carte par carte
-        val old = box(f)
+        recordKey(f.key, ok, fast)
+    }
+
+    private fun recordKey(k: String, ok: Boolean, fast: Boolean) {
+        val old = boxKey(k)
         val nb = when {
             !ok -> 1
             fast -> min(5, old + 1)
             else -> max(1, old)
         }
         val wait = intArrayOf(0, 0, 1, 3, 7, 14)[nb]
-        p.edit().putInt("b_${f.key}", nb).putLong("d_${f.key}", today() + wait).apply()
+        p.edit().putInt("b_$k", nb).putLong("d_$k", today() + wait).apply()
         version++
+    }
+
+    /* ----- Les sommes égales (4 à 18) ----- */
+
+    val SUM_TARGETS = (4..18).toList()
+
+    /** Une manche réussie avec 2 ou 3 étoiles compte comme réussie ; 3 étoiles rapides font monter la boîte. */
+    fun recordSum(n: Int, stars: Int, fast: Boolean) {
+        recordKey("SUM_$n", stars >= 2, stars == 3 && fast)
+        if (stars > bestStars(n)) p.edit().putInt("s_SUM_$n", stars).apply()
+        version++
+    }
+
+    fun bestStars(n: Int): Int = p.getInt("s_SUM_$n", 0)
+    fun sumMastered(n: Int): Boolean = boxKey("SUM_$n") >= 4
+
+    /** Nombre conseillé : d'abord ceux à revoir aujourd'hui, puis le premier jamais joué, dans l'ordre. */
+    fun nextSum(): Int {
+        val t = today()
+        SUM_TARGETS.filter { boxKey("SUM_$it") in 1..5 && dueKey("SUM_$it") <= t }
+            .minByOrNull { boxKey("SUM_$it") }?.let { return it }
+        SUM_TARGETS.firstOrNull { boxKey("SUM_$it") == 0 }?.let { return it }
+        return SUM_TARGETS.minByOrNull { boxKey("SUM_$it") } ?: 9
     }
 
     fun allFacts(o: Op): List<Fact> = (1..10).flatMap { a -> (1..10).map { b -> Fact(o, a, b) } }
