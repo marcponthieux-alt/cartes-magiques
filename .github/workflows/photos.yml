@@ -3,6 +3,9 @@ name: Chercher des photos libres (Wikimedia Commons)
 on:
   workflow_dispatch: {}
 
+permissions:
+  contents: write
+
 jobs:
   photos:
     runs-on: ubuntu-latest
@@ -13,9 +16,13 @@ jobs:
           python-version: "3.12"
       - run: pip install pillow
       - run: python tools/photo_candidates.py
-      - uses: actions/upload-artifact@v4
-        with:
-          name: photos-candidates
-          path: |
-            candidates
-            planches
+      - name: Déposer les candidates dans la branche photos-candidates
+        run: |
+          mkdir -p /tmp/out && cp -r candidates planches /tmp/out/
+          git config user.name "github-actions"; git config user.email "actions@github.com"
+          git checkout --orphan photos-candidates
+          git rm -rf . -q
+          cp -r /tmp/out/* .
+          git add candidates planches
+          git commit -q -m "Photos candidates"
+          git push -f origin photos-candidates
