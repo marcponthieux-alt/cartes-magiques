@@ -52,6 +52,12 @@ class Progress(ctx: Context) {
         version++
     }
 
+    /* ----- Course d'orientation : un suivi par symbole ----- */
+
+    fun oriBox(id: String): Int = boxKey("ORI_$id")
+    fun oriDue(id: String): Boolean = boxKey("ORI_$id") > 0 && dueKey("ORI_$id") <= today()
+    fun recordOri(id: String, ok: Boolean) = recordKey("ORI_$id", ok, ok)
+
     /* ----- Les sommes égales (4 à 18) ----- */
 
     val SUM_TARGETS = (4..18).toList()

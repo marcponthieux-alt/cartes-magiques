@@ -102,6 +102,7 @@ fun App(g: Game) {
                     Screen.REVISION -> RevisionScreen(g)
                     Screen.DAILY_END -> DailyEnd(g)
                     Screen.SUMS -> SumsScreen(g)
+                    Screen.ORI -> OriApp(g)
                 }
                 AnimatedVisibility(
                     visible = g.bannerOn && g.screen == Screen.GAME,
@@ -120,7 +121,9 @@ fun App(g: Game) {
                 Celebration(g)
                 if (g.gamePaused && (g.screen == Screen.GAME || g.screen == Screen.SUMS)) PauseOverlay(g)
             }
-            BackHandler(enabled = g.screen != Screen.HOME) { g.goHome() }
+            BackHandler(enabled = g.screen != Screen.HOME) {
+                if (g.screen == Screen.ORI && !g.ori.atMenu) g.ori.back() else g.goHome()
+            }
         }
     }
 }
@@ -297,10 +300,16 @@ private fun Home(g: Game) {
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 14.dp, vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        Text(
-            "Les cartes magiques", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Ink,
-            modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center
-        )
+        Box(Modifier.fillMaxWidth()) {
+            Text(
+                "Les cartes magiques", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Ink,
+                modifier = Modifier.align(Alignment.Center)
+            )
+            Box(
+                Modifier.align(Alignment.CenterEnd).clip(RoundedCornerShape(12.dp)).background(Color(0xFFE8743B))
+                    .clickable { g.openOri() }.padding(horizontal = 10.dp, vertical = 4.dp)
+            ) { Text("🧭 C.O.", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color.White) }
+        }
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Op.entries.forEach { o ->
                 val on = g.op == o

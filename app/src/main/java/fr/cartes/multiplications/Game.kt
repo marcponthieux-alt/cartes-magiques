@@ -9,7 +9,7 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 
-enum class Screen { HOME, MEMO, GAME, END, REVISION, DAILY_END, SUMS }
+enum class Screen { HOME, MEMO, GAME, END, REVISION, DAILY_END, SUMS, ORI }
 
 enum class Mode(val label: String, val sub: String) {
     REV("Révision", "Je regarde les cartes"),
@@ -33,6 +33,11 @@ enum class Res { OK, KO, PASS }
 class Game(private val speaker: Speaker, val ear: Ear, val progress: Progress) {
     private val h = Handler(Looper.getMainLooper())
     private val ui = Handler(Looper.getMainLooper())
+
+    /** Module course d'orientation (symboles des cartes). */
+    val ori = OriGame(progress, speaker)
+
+    fun openOri() { cancelAll(); ori.back(); screen = Screen.ORI }
 
     var screen by mutableStateOf(Screen.HOME)
     var op by mutableStateOf(Op.MUL)
