@@ -3,6 +3,19 @@ package fr.cartes.multiplications
 import android.os.Handler
 import android.os.Looper
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.produceState
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.layout.ContentScale
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -312,13 +325,27 @@ object Ori {
  *  Jeux
  * ===================================================================== */
 
-enum class OriScreen { MENU, LEARN, PAIRS, MEMORY, QUIZ, RESULT }
+enum class OriScreen { MENU, LEARN, PAIRS, MEMORY, QUIZ, RESULT, TERRAIN, DETECTIVE, BANK }
 enum class QType { SYM_TO_NAME, NAME_TO_SYM, SYM_TO_FAM }
 
 class OriQ(val sym: Sym, val type: QType, val choices: List<Sym>, val fams: List<Fam>)
 class MemCard(val sym: Sym, val isName: Boolean)
 
-class OriGame(private val progress: Progress, private val speaker: Speaker) {
+/** Une question « photo ↔ symbole ». */
+class TerrainQ(val photo: PhotoItem, val sym: Sym, val choices: List<Sym>)
+
+/** Un petit extrait de carte avec un poste (coordonnées de 0 à 100). */
+class Scene(
+    val target: Sym,
+    val items: List<Triple<Sym, Float, Float>>,
+    val start: Pair<Float, Float>,
+    val yellow: Pair<Float, Float>,
+    val green: Pair<Float, Float>,
+    val pathY: Float,
+    val choices: List<Sym>
+)
+
+class OriGame(private val progress: Progress, private val speaker: Speaker, val photos: PhotoBank) {
     private val h = Handler(Looper.getMainLooper())
 
     var screen by mutableStateOf(OriScreen.MENU)
@@ -355,6 +382,16 @@ class OriGame(private val progress: Progress, private val speaker: Speaker) {
     var quiz by mutableStateOf<List<OriQ>>(emptyList())
     var qIdx by mutableIntStateOf(0)
     var qPicked by mutableStateOf<Int?>(null)
+
+    // Photo ↔ symbole
+    var terrain by mutableStateOf<List<TerrainQ>>(emptyList())
+    var tIdx by mutableIntStateOf(0)
+    var tPicked by mutableStateOf<Int?>(null)
+
+    // Détective du poste
+    var scenes by mutableStateOf<List<Scene>>(emptyList())
+    var dIdx by mutableIntStateOf(0)
+    var dPicked by mutableStateOf<Int?>(null)
 
     // Résultat
     var errors by mutableIntStateOf(0)
@@ -503,12 +540,101 @@ class OriGame(private val progress: Progress, private val speaker: Speaker) {
         if (qIdx + 1 < quiz.size) { qIdx++; qPicked = null } else finish()
     }
 
+    /* ----- Photo ↔ symbole : relier le terrain à la carte ----- */
+
+    fun startTerrain() {
+        title = "Photo ↔ symbole"; lastGame = OriScreen.TERRAIN
+        val items = photos.all().filter { p -> Ori.ALL.any { it.id == p.symbol } }.shuffled()
+        // Une question par symbole au plus, 8 questions
+        val picked = items.distinctBy { it.symbol }.take(8)
+        terrain = picked.map { p ->
+            val s = Ori.byId(p.symbol)
+            val pool = Ori.ALL.filter { it.level > 1 && it.id != s.id }
+            val near = pool.filter { it.level == s.level || it.fam == s.fam }.shuffled()
+            val choices = (listOf(s) + (near + pool.shuffled()).distinct().take(3)).shuffled()
+            TerrainQ(p, s, choices)
+        }
+        tIdx = 0; tPicked = null; errors = 0; good = 0; total = terrain.size
+        screen = OriScreen.TERRAIN
+    }
+
+    fun answerT(k: Int) {
+        if (tPicked != null) return
+        tPicked = k
+        val q = terrain[tIdx]
+        val ok = q.choices[k].id == q.sym.id
+        if (ok) good++ else errors++
+        progress.recordOri(q.sym.id, ok)
+        if (ok) h.postDelayed({ nextT() }, 1600)
+    }
+
+    fun nextT() {
+        h.removeCallbacksAndMessages(null)
+        if (tIdx + 1 < terrain.size) { tIdx++; tPicked = null } else finish()
+    }
+
+    /* ----- Détective du poste : que trouve-t-on au centre du cercle ? ----- */
+
+    private val pointIds = listOf(
+        "butte", "depression", "trou", "bloc", "gros_bloc", "groupe_blocs", "trou_rocheux",
+        "trou_eau", "puits", "gros_arbre", "buisson", "batiment"
+    )
+
+    /** Symboles de même forme mais de couleur différente : point, V, carré… */
+    private fun shape(id: String): String = when (id) {
+        "butte", "bloc", "gros_bloc", "buisson" -> "point"
+        "trou", "trou_rocheux", "trou_eau" -> "v"
+        "puits", "batiment" -> "carre"
+        else -> id
+    }
+
+    fun startDetective() {
+        title = "Détective du poste"; lastGame = OriScreen.DETECTIVE
+        val points = pointIds.map { Ori.byId(it) }
+        val cells = listOf(
+            22f to 22f, 50f to 20f, 78f to 24f, 20f to 50f, 50f to 52f, 80f to 50f, 24f to 80f, 52f to 80f, 80f to 78f
+        )
+        scenes = points.shuffled().take(8).map { target ->
+            val spots = cells.shuffled()
+            val decoys = points.filter { it.id != target.id }.shuffled().take(4)
+            val items = listOf(Triple(target, spots[0].first, spots[0].second)) +
+                decoys.mapIndexed { i, d -> Triple(d, spots[i + 1].first, spots[i + 1].second) }
+            // Les mauvaises réponses : des éléments présents sur la carte, et des formes qui se ressemblent.
+            val alike = points.filter { it.id != target.id && (it.fam == target.fam || shape(it.id) == shape(target.id)) }
+            val choices = (listOf(target) + (decoys.take(2) + alike.shuffled() + decoys).distinct().take(3)).shuffled()
+            Scene(
+                target, items, spots[5], spots[6], spots[7], (30..70).random().toFloat(), choices
+            )
+        }
+        dIdx = 0; dPicked = null; errors = 0; good = 0; total = scenes.size
+        screen = OriScreen.DETECTIVE
+    }
+
+    fun answerD(k: Int) {
+        if (dPicked != null) return
+        dPicked = k
+        val sc = scenes[dIdx]
+        val ok = sc.choices[k].id == sc.target.id
+        if (ok) good++ else errors++
+        progress.recordOri(sc.target.id, ok)
+        if (ok) h.postDelayed({ nextD() }, 1600)
+    }
+
+    fun nextD() {
+        h.removeCallbacksAndMessages(null)
+        if (dIdx + 1 < scenes.size) { dIdx++; dPicked = null } else finish()
+    }
+
+    fun openBank() { title = "Banque de photos"; screen = OriScreen.BANK }
+
     private fun finish() { screen = OriScreen.RESULT }
 
     fun replay() {
         when (lastGame) {
             OriScreen.PAIRS -> startPairs(level)
             OriScreen.MEMORY -> startMemory(level)
+            OriScreen.TERRAIN -> startTerrain()
+            OriScreen.DETECTIVE -> startDetective()
             else -> startQuiz(level)
         }
     }
@@ -572,6 +698,9 @@ fun OriApp(g: Game) {
             OriScreen.MEMORY -> OriMemory(o)
             OriScreen.QUIZ -> OriQuiz(o)
             OriScreen.RESULT -> OriResult(o)
+            OriScreen.TERRAIN -> OriTerrain(o)
+            OriScreen.DETECTIVE -> OriDetective(o)
+            OriScreen.BANK -> OriBank(o)
         }
     }
 }
@@ -600,6 +729,18 @@ private fun OriMenu(g: Game) {
                 OButton("Paires", Color.White, O_ACCENT, Modifier.weight(1f)) { o.startPairs(0) }
                 OButton("Quiz", Color.White, O_ACCENT, Modifier.weight(1f)) { o.startQuiz(0) }
             }
+        }
+        Column(
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Color(0xFF2E7D4F)).padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text("🌲  Sur le terrain", fontSize = 19.sp, fontWeight = FontWeight.Bold, color = Color.White)
+            Text("Relier la carte et la réalité.", fontSize = 13.sp, color = Color.White)
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                OButton("Photo ↔ symbole", Color.White, Color(0xFF2E7D4F), Modifier.weight(1f)) { o.startTerrain() }
+                OButton("Détective du poste", Color.White, Color(0xFF2E7D4F), Modifier.weight(1f)) { o.startDetective() }
+            }
+            OButton("📷  Banque de photos", Color(0x33FFFFFF), Color.White, Modifier.fillMaxWidth()) { o.openBank() }
         }
         Ori.LEVELS.forEachIndexed { k, name ->
             val lv = k + 1
@@ -849,5 +990,237 @@ private fun OriResult(o: OriGame) {
         )
         OButton("🔁  Rejouer", O_ACCENT, Color.White, Modifier.fillMaxWidth()) { o.replay() }
         OButton("Menu des symboles", Color.White, O_INK, Modifier.fillMaxWidth()) { o.back() }
+    }
+}
+
+
+/* =====================================================================
+ *  Sur le terrain : photo ↔ symbole, détective du poste, banque de photos
+ * ===================================================================== */
+
+@Composable
+private fun PhotoView(bank: PhotoBank, item: PhotoItem, modifier: Modifier) {
+    val bmp by produceState<ImageBitmap?>(null, item.path) {
+        value = withContext(Dispatchers.IO) { bank.load(item) }
+    }
+    Box(modifier.clip(RoundedCornerShape(14.dp)).background(O_LINE), contentAlignment = Alignment.Center) {
+        val b = bmp
+        if (b != null) Image(b, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+        else Text("📷", fontSize = 28.sp)
+    }
+}
+
+@Composable
+private fun AnswerGrid(n: Int, picked: Int?, isRight: (Int) -> Boolean, onPick: (Int) -> Unit, content: @Composable (Int) -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        (0 until n).chunked(2).forEach { row ->
+            Row(Modifier.height(112.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                row.forEach { k ->
+                    val right = isRight(k)
+                    val edge = when {
+                        picked == null -> O_LINE
+                        right -> O_GOOD
+                        picked == k -> O_BAD
+                        else -> O_LINE
+                    }
+                    Box(
+                        Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(16.dp)).background(Color.White)
+                            .border(if (picked != null && (right || picked == k)) 4.dp else 2.dp, edge, RoundedCornerShape(16.dp))
+                            .clickable { onPick(k) }.padding(6.dp),
+                        contentAlignment = Alignment.Center
+                    ) { content(k) }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun Feedback(ok: Boolean, sym: Sym, onNext: () -> Unit) {
+    Column(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(if (ok) Color(0xFFE6F6EC) else Color(0xFFFBE7E9)).padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Text(if (ok) "Bravo !" else "C'était : ${sym.name}", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = O_INK)
+        Text("💡 ${sym.tip}", fontSize = 14.sp, lineHeight = 18.sp, color = O_INK)
+        if (!ok) OButton("Compris ▶", O_INK, Color.White, Modifier.fillMaxWidth()) { onNext() }
+    }
+}
+
+@Composable
+private fun OriTerrain(o: OriGame) {
+    Column(Modifier.fillMaxSize().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        if (o.terrain.isEmpty()) {
+            OriTop(o.title, "Pas encore de photos", { o.back() })
+            Text(
+                "Ajoute des photos dans la banque de photos pour jouer.",
+                fontSize = 16.sp, color = O_SUB, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()
+            )
+            OButton("📷  Banque de photos", O_INK, Color.White, Modifier.fillMaxWidth()) { o.openBank() }
+            return@Column
+        }
+        val q = o.terrain[o.tIdx]
+        val picked = o.tPicked
+        OriTop(o.title, "Photo ${o.tIdx + 1} sur ${o.terrain.size} · ✓ ${o.good}", { o.back() })
+        Text("Quel symbole de la carte montre cette photo ?", fontSize = 15.sp, color = O_SUB, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
+        PhotoView(o.photos, q.photo, Modifier.fillMaxWidth().height(230.dp))
+        Text(
+            q.photo.credit ?: "📷 Photo de la famille", fontSize = 10.sp, color = O_SUB, maxLines = 2,
+            modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center
+        )
+        AnswerGrid(4, picked, { k -> q.choices[k].id == q.sym.id }, { o.answerT(it) }) { k ->
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                SymbolTile(q.choices[k], 64.dp)
+                if (picked != null) Text(q.choices[k].name, fontSize = 11.sp, lineHeight = 13.sp, color = O_INK, modifier = Modifier.weight(1f))
+            }
+        }
+        if (picked != null) Feedback(q.choices[picked].id == q.sym.id, q.sym) { o.nextT() }
+    }
+}
+
+/** Dessine un symbole ponctuel à la position (x, y) d'un extrait de carte. */
+private fun DrawScope.placeSym(s: Sym, x: Float, y: Float, k: Float = 0.2f) {
+    val w = size.width; val hh = size.height
+    withTransform({
+        translate(x * w / 100f - 0.5f * k * w, y * hh / 100f - 0.5f * k * hh)
+        scale(k, k, pivot = Offset.Zero)
+    }) { s.draw(this) }
+}
+
+@Composable
+private fun SceneMap(sc: Scene, modifier: Modifier) {
+    Canvas(modifier.clip(RoundedCornerShape(14.dp)).background(Color.White).border(1.dp, O_LINE, RoundedCornerShape(14.dp))) {
+        val w = size.width; val hh = size.height
+        fun at(x: Float, y: Float) = Offset(x * w / 100f, y * hh / 100f)
+        // Fond : une clairière jaune, une zone verte, des courbes et un chemin
+        drawOval(C_YEL, at(sc.yellow.first - 16f, sc.yellow.second - 11f), Size(32f * w / 100f, 22f * hh / 100f))
+        drawOval(C_G2, at(sc.green.first - 15f, sc.green.second - 12f), Size(30f * w / 100f, 24f * hh / 100f))
+        for (k in 0..1) {
+            val y = 12f + k * 80f
+            drawPath(Path().apply {
+                val a = at(0f, y); moveTo(a.x, a.y)
+                val c1 = at(35f, y - 8f); val c2 = at(65f, y + 8f); val b = at(100f, y)
+                cubicTo(c1.x, c1.y, c2.x, c2.y, b.x, b.y)
+            }, C_BROWN, style = Stroke(0.6f * w / 100f))
+        }
+        drawPath(Path().apply {
+            val a = at(0f, sc.pathY); moveTo(a.x, a.y)
+            val c1 = at(40f, sc.pathY - 14f); val c2 = at(60f, sc.pathY + 14f); val b = at(100f, sc.pathY + 4f)
+            cubicTo(c1.x, c1.y, c2.x, c2.y, b.x, b.y)
+        }, C_BLACK, style = Stroke(0.8f * w / 100f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(2.4f * w / 100f, 1.2f * w / 100f))))
+        // Les éléments
+        sc.items.forEach { (s, x, y) -> placeSym(s, x, y) }
+        // Le départ et le poste
+        val t = sc.items.first()
+        val st = sc.start
+        val r = 8f * w / 100f
+        val tri = Path().apply {
+            val p1 = at(st.first, st.second - 5f); val p2 = at(st.first + 5f, st.second + 4f); val p3 = at(st.first - 5f, st.second + 4f)
+            moveTo(p1.x, p1.y); lineTo(p2.x, p2.y); lineTo(p3.x, p3.y); close()
+        }
+        drawPath(tri, C_PURPLE, style = Stroke(0.9f * w / 100f))
+        val a = at(st.first, st.second); val b = at(t.second, t.third)
+        val dx = b.x - a.x; val dy = b.y - a.y
+        val len = kotlin.math.sqrt(dx * dx + dy * dy).coerceAtLeast(1f)
+        val s0 = Offset(a.x + dx / len * 6f * w / 100f, a.y + dy / len * 6f * w / 100f)
+        val s1 = Offset(b.x - dx / len * r, b.y - dy / len * r)
+        drawLine(C_PURPLE, s0, s1, strokeWidth = 0.7f * w / 100f)
+        drawCircle(C_PURPLE, r, b, style = Stroke(0.9f * w / 100f))
+    }
+}
+
+@Composable
+private fun OriDetective(o: OriGame) {
+    if (o.scenes.isEmpty()) { Text("…"); return }
+    val sc = o.scenes[o.dIdx]
+    val picked = o.dPicked
+    Column(Modifier.fillMaxSize().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        OriTop(o.title, "Poste ${o.dIdx + 1} sur ${o.scenes.size} · ✓ ${o.good}", { o.back() })
+        Text(
+            "Qu'y a-t-il au centre du cercle violet ?", fontSize = 15.sp, color = O_SUB,
+            modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center
+        )
+        SceneMap(sc, Modifier.fillMaxWidth().height(260.dp))
+        AnswerGrid(4, picked, { k -> sc.choices[k].id == sc.target.id }, { o.answerD(it) }) { k ->
+            Text(sc.choices[k].name, fontSize = 15.sp, lineHeight = 18.sp, fontWeight = FontWeight.SemiBold, color = O_INK, textAlign = TextAlign.Center)
+        }
+        if (picked != null) Feedback(sc.choices[picked].id == sc.target.id, sc.target) { o.nextD() }
+    }
+}
+
+@Composable
+private fun OriBank(o: OriGame) {
+    val bank = o.photos
+    val ver = bank.version
+    var target by remember { mutableStateOf<String?>(null) }
+    var msg by remember { mutableStateOf("") }
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        val t = target
+        if (uri != null && t != null) msg = if (bank.add(uri, t)) "Photo ajoutée ✓" else "Impossible de lire cette photo."
+    }
+    val all = remember(ver) { bank.all() }
+    Column(Modifier.fillMaxSize().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        OriTop("Banque de photos", "${all.count { it.user }} photo(s) de la famille · ${all.count { !it.user }} photos libres", { o.back() })
+        Text(
+            "Touche « + Photo » pour ajouter une photo prise en forêt. Le ✕ retire une photo de la famille.",
+            fontSize = 13.sp, color = O_SUB
+        )
+        if (msg.isNotEmpty()) Text(msg, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = O_GOOD)
+        LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            item(key = "credits_top") {
+                Text(
+                    "Les photos libres viennent de Wikimedia Commons (licences Creative Commons). Crédits en bas de la liste.",
+                    fontSize = 11.sp, color = O_SUB
+                )
+            }
+            items(Ori.ALL.filter { it.level > 1 }, key = { it.id }) { s ->
+                val mine = all.filter { it.symbol == s.id }
+                Column(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Color.White).padding(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        SymbolTile(s, 40.dp)
+                        Text(s.name, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = O_INK, modifier = Modifier.weight(1f))
+                        OButton("+ Photo", O_INK, Color.White) {
+                            target = s.id
+                            picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                        }
+                    }
+                    if (mine.isNotEmpty()) {
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            items(mine, key = { it.path }) { p ->
+                                Box {
+                                    PhotoView(bank, p, Modifier.size(76.dp))
+                                    if (p.user) {
+                                        Box(
+                                            Modifier.align(Alignment.TopEnd).size(24.dp).clip(RoundedCornerShape(12.dp))
+                                                .background(Color(0xCC000000)).clickable { bank.delete(p) },
+                                            contentAlignment = Alignment.Center
+                                        ) { Text("✕", fontSize = 13.sp, color = Color.White) }
+                                    } else {
+                                        Text(
+                                            "libre", fontSize = 9.sp, color = Color.White,
+                                            modifier = Modifier.align(Alignment.BottomStart).background(Color(0x99000000)).padding(horizontal = 4.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            item(key = "credits") {
+                Column(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Color.White).padding(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text("Crédits des photos libres", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = O_INK)
+                    all.filter { !it.user }.forEach { p ->
+                        Text("• ${Ori.byId(p.symbol).name} — ${p.credit}\n  ${p.page ?: ""}", fontSize = 10.sp, lineHeight = 12.sp, color = O_SUB)
+                    }
+                }
+            }
+        }
     }
 }

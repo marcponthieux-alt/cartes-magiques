@@ -30,12 +30,12 @@ enum class Phase { PICK, IDLE, ASK, LISTEN, RIGHT, WRONG, PASSED }
 enum class Res { OK, KO, PASS }
 
 /** Déroulement d'une partie (25 cartes ou entraînement du jour) et du mode révision. */
-class Game(private val speaker: Speaker, val ear: Ear, val progress: Progress) {
+class Game(private val speaker: Speaker, val ear: Ear, val progress: Progress, val photos: PhotoBank) {
     private val h = Handler(Looper.getMainLooper())
     private val ui = Handler(Looper.getMainLooper())
 
     /** Module course d'orientation (symboles des cartes). */
-    val ori = OriGame(progress, speaker)
+    val ori = OriGame(progress, speaker, photos)
 
     fun openOri() { cancelAll(); ori.back(); screen = Screen.ORI }
 
