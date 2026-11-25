@@ -5,7 +5,7 @@ Application Android pour réviser les tables de multiplication de 1 à 10, à pa
 
 ## Installer sur le téléphone (Xiaomi Mi 9)
 
-1. Sur le téléphone, ouvrir la page **Releases** de ce dépôt et télécharger `cartes-magiques.apk`.
+1. Sur le téléphone, ouvrir https://github.com/marcponthieux-alt/cartes-magiques/releases/latest/download/cartes-magiques.apk
 2. Ouvrir le fichier. Android demande d'autoriser l'installation d'applications inconnues
    pour le navigateur ou le gestionnaire de fichiers : accepter, puis **Installer**.
    (Sur MIUI, désactiver si besoin « Analyse de sécurité » pour ce fichier.)
