@@ -58,6 +58,14 @@ class Progress(ctx: Context) {
     fun oriDue(id: String): Boolean = boxKey("ORI_$id") > 0 && dueKey("ORI_$id") <= today()
     fun recordOri(id: String, ok: Boolean) = recordKey("ORI_$id", ok, ok)
 
+    /* ----- Dictée : un suivi par mot ----- */
+
+    private fun wkey(w: String) = "DIC_" + w.lowercase().replace(Regex("[^\\p{L}'-]"), "_")
+    fun wordBox(w: String): Int = boxKey(wkey(w))
+    fun wordDue(w: String): Boolean = boxKey(wkey(w)) == 0 || dueKey(wkey(w)) <= today()
+    /** ok = trouvé en 2 essais au plus ; firstTry = trouvé du premier coup (seul cas où la boîte monte). */
+    fun recordWord(w: String, ok: Boolean, firstTry: Boolean) = recordKey(wkey(w), ok, firstTry)
+
     /* ----- Les sommes égales (4 à 18) ----- */
 
     val SUM_TARGETS = (4..18).toList()

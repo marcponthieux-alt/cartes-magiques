@@ -173,7 +173,8 @@ object Ori {
         "La végétation",
         "L'eau",
         "Le relief",
-        "Les rochers"
+        "Les rochers",
+        "Les définitions de postes"
     )
     val LEVEL_WHY = listOf(
         "La base : chaque couleur a un sens.",
@@ -181,7 +182,8 @@ object Ori {
         "Pour choisir où courir : le blanc est rapide, le vert foncé est à éviter.",
         "Des repères faciles à reconnaître sur le terrain.",
         "Plus difficile : lire la forme du terrain avec les courbes marron.",
-        "Des repères précis, souvent choisis pour placer les postes."
+        "Des repères précis, souvent choisis pour placer les postes.",
+        "La feuille de définitions (IOF 2024) : quel élément, et où est la balise."
     )
 
     val ALL: List<Sym> = listOf(
@@ -314,7 +316,60 @@ object Ori {
         },
         Sym("pierreux", 6, Fam.NOIR, "Sol pierreux", "De petits points noirs.") { SCATTER.forEach { (x, y) -> dot(x, y, 2.6f, C_BLACK) } },
         Sym("trou_rocheux", 6, Fam.NOIR, "Trou rocheux", "Un V noir.") { vee(C_BLACK) },
-        Sym("affleurement", 6, Fam.NOIR, "Affleurement rocheux (roche nue)", "Du gris : de la roche à nu.") { drawPath(lake(), C_GREY) }
+        Sym("affleurement", 6, Fam.NOIR, "Affleurement rocheux (roche nue)", "Du gris : de la roche à nu.") { drawPath(lake(), C_GREY) },
+
+        // 7. Définitions de postes (IOF 2024) — colonne D : l'élément ; colonne G : où est la balise
+        Sym("d_colline", 7, Fam.NOIR, "Colline (colonne D)", "Une forme ovale : comme la courbe fermée de la carte.") {
+            drawOval(C_BLACK, o(20f, 32f), Size(60f * u(), 36f * u()), style = Stroke(5f * u()))
+        },
+        Sym("d_butte", 7, Fam.NOIR, "Butte (colonne D)", "Un point plein : une petite bosse.") { dot(50f, 50f, 13f, C_BLACK) },
+        Sym("d_depression", 7, Fam.NOIR, "Petite dépression (colonne D)", "Un U : un petit creux.") {
+            drawArc(C_BLACK, 0f, 180f, false, o(28f, 22f), Size(44f * u(), 44f * u()), style = Stroke(6f * u()))
+        },
+        Sym("d_trou", 7, Fam.NOIR, "Trou (colonne D)", "Un V : un trou.") { vee(C_BLACK) },
+        Sym("d_rentrant", 7, Fam.NOIR, "Rentrant (colonne D)", "Une forme en arche : un petit vallon qui entre dans la pente.") {
+            val pth = Path().apply {
+                val a = o(22f, 82f); moveTo(a.x, a.y)
+                val c1 = o(22f, 18f); val c2 = o(78f, 18f); val b = o(78f, 82f)
+                cubicTo(c1.x, c1.y, c2.x, c2.y, b.x, b.y)
+            }
+            drawPath(pth, C_BLACK, style = Stroke(6f * u()))
+        },
+        Sym("d_falaise", 7, Fam.NOIR, "Falaise (colonne D)", "Un trait avec des dents, comme sur la carte.") { toothed(C_BLACK, 5f, 16f) },
+        Sym("d_rocher", 7, Fam.NOIR, "Rocher, bloc rocheux (colonne D)", "Un triangle plein.") { tri(50f, 52f, 24f, C_BLACK) },
+        Sym("d_clairiere", 7, Fam.NOIR, "Clairière (colonne D)", "Un cercle en pointillés : un trou dans la forêt.") {
+            drawCircle(C_BLACK, 28f * u(), o(50f, 50f), style = Stroke(5f * u(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(7f * u(), 6f * u()))))
+        },
+        Sym("d_souche", 7, Fam.NOIR, "Souche (colonne D)", "Un cercle barré d'une croix.") {
+            ring(50f, 50f, 28f, C_BLACK, 5f); stroke(path(31f to 31f, 69f to 69f), C_BLACK, 5f); stroke(path(69f to 31f, 31f to 69f), C_BLACK, 5f)
+        },
+        Sym("d_ruine", 7, Fam.NOIR, "Ruine (colonne D)", "Un carré en pointillés : un bâtiment écroulé.") {
+            stroke(path(25f to 25f, 75f to 25f, 75f to 75f, 25f to 75f, close = true), C_BLACK, 5f, floatArrayOf(9f, 6f))
+        },
+        Sym("d_batiment", 7, Fam.NOIR, "Bâtiment (colonne D)", "Un carré plein.") { drawRect(C_BLACK, o(27f, 27f), Size(46f * u(), 46f * u())) },
+        Sym("d_borne", 7, Fam.NOIR, "Borne (colonne D)", "Un cercle avec un point au milieu.") { ring(50f, 50f, 26f, C_BLACK, 5f); dot(50f, 50f, 7f, C_BLACK) },
+        Sym("d_tour", 7, Fam.NOIR, "Tour (colonne D)", "Un T.") { stroke(path(22f to 24f, 78f to 24f), C_BLACK, 7f); stroke(path(50f to 24f, 50f to 82f), C_BLACK, 7f) },
+        Sym("d_arbre", 7, Fam.NOIR, "Arbre remarquable (colonne D)", "Un petit arbre dessiné.") {
+            stroke(path(50f to 86f, 50f to 52f), C_BLACK, 6f); ring(50f, 36f, 19f, C_BLACK, 5f)
+        },
+        Sym("g_nord", 7, Fam.NOIR, "Côté nord (colonne G)", "Le point est en haut : la balise est du côté nord de l'élément.") {
+            ring(50f, 52f, 26f, C_BLACK, 4f); dot(50f, 26f, 8f, C_BLACK)
+        },
+        Sym("g_est", 7, Fam.NOIR, "Côté est (colonne G)", "Le point est à droite : côté est.") { ring(50f, 50f, 26f, C_BLACK, 4f); dot(76f, 50f, 8f, C_BLACK) },
+        Sym("g_sud", 7, Fam.NOIR, "Côté sud (colonne G)", "Le point est en bas : côté sud.") { ring(50f, 48f, 26f, C_BLACK, 4f); dot(50f, 74f, 8f, C_BLACK) },
+        Sym("g_ouest", 7, Fam.NOIR, "Côté ouest (colonne G)", "Le point est à gauche : côté ouest.") { ring(50f, 50f, 26f, C_BLACK, 4f); dot(24f, 50f, 8f, C_BLACK) },
+        Sym("g_pied", 7, Fam.NOIR, "Au pied (colonne G)", "Un angle avec un point en bas : la balise est au pied (d'une falaise, d'un rocher…).") {
+            stroke(path(30f to 16f, 30f to 80f, 84f to 80f), C_BLACK, 5f); dot(42f, 69f, 7f, C_BLACK)
+        },
+        Sym("g_sur", 7, Fam.NOIR, "Sur (colonne G)", "Le point est au-dessus : la balise est sur l'élément.") {
+            stroke(path(22f to 80f, 22f to 52f, 78f to 52f, 78f to 80f), C_BLACK, 5f); dot(50f, 32f, 8f, C_BLACK)
+        },
+        Sym("g_sous", 7, Fam.NOIR, "Sous (colonne G)", "Le point est en dessous : la balise est sous l'élément.") {
+            stroke(path(22f to 80f, 22f to 30f, 78f to 30f, 78f to 80f), C_BLACK, 5f); dot(50f, 60f, 8f, C_BLACK)
+        },
+        Sym("g_entre", 7, Fam.NOIR, "Entre (colonne G)", "Un point entre deux traits : la balise est entre deux éléments.") {
+            stroke(path(18f to 28f, 82f to 28f), C_BLACK, 5f); stroke(path(18f to 72f, 82f to 72f), C_BLACK, 5f); dot(50f, 50f, 8f, C_BLACK)
+        }
     )
 
     fun level(n: Int): List<Sym> = ALL.filter { it.level == n }
@@ -325,7 +380,7 @@ object Ori {
  *  Jeux
  * ===================================================================== */
 
-enum class OriScreen { MENU, LEARN, PAIRS, MEMORY, QUIZ, RESULT, TERRAIN, DETECTIVE, BANK }
+enum class OriScreen { MENU, LEARN, PAIRS, MEMORY, QUIZ, RESULT, TERRAIN, DETECTIVE, BANK, INTRUS, DEFS }
 enum class QType { SYM_TO_NAME, NAME_TO_SYM, SYM_TO_FAM }
 
 class OriQ(val sym: Sym, val type: QType, val choices: List<Sym>, val fams: List<Fam>)
@@ -333,6 +388,12 @@ class MemCard(val sym: Sym, val isName: Boolean)
 
 /** Une question « photo ↔ symbole ». */
 class TerrainQ(val photo: PhotoItem, val sym: Sym, val choices: List<Sym>)
+
+/** L'intrus : 4 symboles, dont un qui n'a pas la propriété des 3 autres. */
+class IntrusQ(val prompt: String, val syms: List<Sym>, val odd: Sym, val why: String)
+
+/** Une ligne de la feuille de définitions : élément (D) et position de la balise (G, null = au centre). */
+class DefQ(val num: Int, val code: Int, val d: Sym, val g: Sym?, val choices: List<String>, val answer: String)
 
 /** Un petit extrait de carte avec un poste (coordonnées de 0 à 100). */
 class Scene(
@@ -393,6 +454,16 @@ class OriGame(private val progress: Progress, private val speaker: Speaker, val 
     var dIdx by mutableIntStateOf(0)
     var dPicked by mutableStateOf<Int?>(null)
 
+    // L'intrus
+    var intrus by mutableStateOf<List<IntrusQ>>(emptyList())
+    var iIdx by mutableIntStateOf(0)
+    var iPicked by mutableStateOf<Int?>(null)
+
+    // Lis la définition
+    var defs by mutableStateOf<List<DefQ>>(emptyList())
+    var fIdx by mutableIntStateOf(0)
+    var fPicked by mutableStateOf<Int?>(null)
+
     // Résultat
     var errors by mutableIntStateOf(0)
     var good by mutableIntStateOf(0)
@@ -406,7 +477,7 @@ class OriGame(private val progress: Progress, private val speaker: Speaker, val 
     fun dueList(): List<Sym> = Ori.ALL.filter { progress.oriDue(it.id) }
 
     /** Le premier niveau pas encore bien su : c'est le niveau conseillé. */
-    fun nextLevel(): Int = (1..6).firstOrNull { known(it) < Ori.level(it).size } ?: 6
+    fun nextLevel(): Int = (1..7).firstOrNull { known(it) < Ori.level(it).size } ?: 7
 
     /** Révision du jour : les symboles à revoir, plus 3 nouveaux du niveau conseillé (pratique espacée et mélangée). */
     private fun dailySet(): List<Sym> {
@@ -504,19 +575,22 @@ class OriGame(private val progress: Progress, private val speaker: Speaker, val 
 
     /* ----- Quiz : trouver le bon symbole, le bon nom ou la bonne couleur ----- */
 
+    /** Groupes de symboles qui se mélangent dans les questions : couleurs / symboles de carte / définitions IOF. */
+    private fun grp(l: Int): Int = if (l == 1) 0 else if (l == 7) 2 else 1
+
     fun startQuiz(lv: Int) {
         level = lv; title = titleFor(lv); lastGame = OriScreen.QUIZ
         val set = setFor(lv).shuffled().take(8)
         quiz = set.mapIndexed { k, s ->
             val type = when {
-                s.level == 1 -> if (k % 2 == 0) QType.NAME_TO_SYM else QType.SYM_TO_NAME
+                s.level == 1 || s.level == 7 -> if (k % 2 == 0) QType.NAME_TO_SYM else QType.SYM_TO_NAME
                 k % 4 == 3 -> QType.SYM_TO_FAM
                 k % 2 == 0 -> QType.NAME_TO_SYM
                 else -> QType.SYM_TO_NAME
             }
             // Distracteurs de la même couleur d'abord : on apprend à distinguer ce qui se ressemble.
-            val same = Ori.ALL.filter { it.id != s.id && it.fam == s.fam && it.level > 1 == s.level > 1 }.shuffled()
-            val other = Ori.ALL.filter { it.id != s.id && it !in same && it.level > 1 == s.level > 1 }.shuffled()
+            val same = Ori.ALL.filter { it.id != s.id && it.fam == s.fam && grp(it.level) == grp(s.level) }.shuffled()
+            val other = Ori.ALL.filter { it.id != s.id && it !in same && grp(it.level) == grp(s.level) }.shuffled()
             val choices = (listOf(s) + (same + other).take(3)).shuffled()
             val fams = (listOf(s.fam) + Fam.entries.filter { it != s.fam }.shuffled().take(3)).shuffled()
             OriQ(s, type, choices, fams)
@@ -549,7 +623,7 @@ class OriGame(private val progress: Progress, private val speaker: Speaker, val 
         val picked = items.distinctBy { it.symbol }.take(8)
         terrain = picked.map { p ->
             val s = Ori.byId(p.symbol)
-            val pool = Ori.ALL.filter { it.level > 1 && it.id != s.id }
+            val pool = Ori.ALL.filter { it.level in 2..6 && it.id != s.id }
             val near = pool.filter { it.level == s.level || it.fam == s.fam }.shuffled()
             val choices = (listOf(s) + (near + pool.shuffled()).distinct().take(3)).shuffled()
             TerrainQ(p, s, choices)
@@ -627,6 +701,117 @@ class OriGame(private val progress: Progress, private val speaker: Speaker, val 
 
     fun openBank() { title = "Banque de photos"; screen = OriScreen.BANK }
 
+    /* ----- L'intrus : lequel n'est pas de la même famille, ou ne se traverse pas ? ----- */
+
+    private val impassable = listOf("lac", "falaise_inf", "interdit", "batiment")
+    private val passable = listOf(
+        "route", "carrossable", "chemin", "sentier", "foret", "lente", "decouvert",
+        "petit_ruisseau", "ruisseau", "butte", "depression", "bloc", "courbe"
+    )
+
+    fun startIntrus() {
+        title = "L'intrus"; lastGame = OriScreen.INTRUS
+        val map = Ori.ALL.filter { it.level in 2..6 }
+        intrus = (0 until 8).map { k ->
+            if (k % 3 == 2) {
+                val odd = Ori.byId(impassable.random())
+                val three = passable.shuffled().take(3).map { Ori.byId(it) }
+                IntrusQ(
+                    "Lequel ne peut-on PAS traverser ?", (three + odd).shuffled(), odd,
+                    "${odd.name} : on ne passe pas. Les trois autres se traversent."
+                )
+            } else {
+                val fam = listOf(Fam.NOIR, Fam.BLEU, Fam.MARRON, Fam.VERT, Fam.JAUNE).random()
+                val three = map.filter { it.fam == fam }.shuffled().take(3)
+                val odd = map.filter { it.fam != fam && it.fam != Fam.VIOLET }.random()
+                IntrusQ(
+                    "Lequel n'est pas de la même famille de couleur ?", (three + odd).shuffled(), odd,
+                    "${odd.name} est ${odd.fam.label.lowercase()} (${odd.fam.meaning}). Les autres sont ${fam.label.lowercase()} (${fam.meaning})."
+                )
+            }
+        }
+        iIdx = 0; iPicked = null; errors = 0; good = 0; total = intrus.size
+        screen = OriScreen.INTRUS
+    }
+
+    fun answerI(k: Int) {
+        if (iPicked != null) return
+        iPicked = k
+        val q = intrus[iIdx]
+        val ok = q.syms[k].id == q.odd.id
+        if (ok) good++ else errors++
+        progress.recordOri(q.odd.id, ok)
+    }
+
+    fun nextI() { if (iIdx + 1 < intrus.size) { iIdx++; iPicked = null } else finish() }
+
+    /* ----- Lis la définition : où est la balise ? ----- */
+
+    /** Élément de la colonne D : (« la colline », « de la colline »). */
+    private val dWords = mapOf(
+        "d_colline" to ("la colline" to "de la colline"), "d_butte" to ("la butte" to "de la butte"),
+        "d_depression" to ("la dépression" to "de la dépression"), "d_trou" to ("le trou" to "du trou"),
+        "d_rentrant" to ("le rentrant" to "du rentrant"), "d_falaise" to ("la falaise" to "de la falaise"),
+        "d_rocher" to ("le rocher" to "du rocher"), "d_clairiere" to ("la clairière" to "de la clairière"),
+        "d_souche" to ("la souche" to "de la souche"), "d_ruine" to ("la ruine" to "de la ruine"),
+        "d_batiment" to ("le bâtiment" to "du bâtiment"), "d_borne" to ("la borne" to "de la borne"),
+        "d_tour" to ("la tour" to "de la tour"), "d_arbre" to ("l'arbre" to "de l'arbre")
+    )
+    private val gOk = mapOf(
+        "g_pied" to setOf("d_falaise", "d_rocher", "d_tour", "d_batiment", "d_arbre", "d_borne"),
+        "g_sur" to setOf("d_colline", "d_butte", "d_rocher", "d_souche"),
+        "g_sous" to setOf("d_arbre")
+    )
+
+    private fun sentence(d: String, g: String?): String {
+        val (le, de) = dWords.getValue(d)
+        return "La balise est " + when (g) {
+            null -> "au centre $de"
+            "g_nord" -> "côté nord $de"
+            "g_est" -> "côté est $de"
+            "g_sud" -> "côté sud $de"
+            "g_ouest" -> "côté ouest $de"
+            "g_pied" -> "au pied $de"
+            "g_sur" -> "sur $le"
+            "g_sous" -> "sous $le"
+            else -> "près $de"
+        } + "."
+    }
+
+    private fun validG(d: String): List<String?> =
+        listOf(null, "g_nord", "g_est", "g_sud", "g_ouest") + gOk.filter { d in it.value }.keys
+
+    fun startDefs() {
+        title = "Lis la définition"; lastGame = OriScreen.DEFS; level = 7
+        defs = (1..8).map { num ->
+            val d = dWords.keys.random()
+            val g = validG(d).random()
+            val answer = sentence(d, g)
+            val alts = mutableListOf<String>()
+            validG(d).shuffled().forEach { g2 -> if (g2 != g) alts += sentence(d, g2) }
+            dWords.keys.shuffled().forEach { d2 -> if (d2 != d && g in validG(d2)) alts += sentence(d2, g) }
+            val choices = (listOf(answer) + alts.distinct().shuffled().take(3)).shuffled()
+            DefQ(num, (31..99).random(), Ori.byId(d), g?.let { Ori.byId(it) }, choices, answer)
+        }
+        fIdx = 0; fPicked = null; errors = 0; good = 0; total = defs.size
+        screen = OriScreen.DEFS
+    }
+
+    fun answerF(k: Int) {
+        if (fPicked != null) return
+        fPicked = k
+        val q = defs[fIdx]
+        val ok = q.choices[k] == q.answer
+        if (ok) good++ else errors++
+        progress.recordOri(q.d.id, ok); q.g?.let { progress.recordOri(it.id, ok) }
+        if (ok) h.postDelayed({ nextF() }, 1600)
+    }
+
+    fun nextF() {
+        h.removeCallbacksAndMessages(null)
+        if (fIdx + 1 < defs.size) { fIdx++; fPicked = null } else finish()
+    }
+
     private fun finish() { screen = OriScreen.RESULT }
 
     fun replay() {
@@ -635,6 +820,8 @@ class OriGame(private val progress: Progress, private val speaker: Speaker, val 
             OriScreen.MEMORY -> startMemory(level)
             OriScreen.TERRAIN -> startTerrain()
             OriScreen.DETECTIVE -> startDetective()
+            OriScreen.INTRUS -> startIntrus()
+            OriScreen.DEFS -> startDefs()
             else -> startQuiz(level)
         }
     }
@@ -701,6 +888,8 @@ fun OriApp(g: Game) {
             OriScreen.TERRAIN -> OriTerrain(o)
             OriScreen.DETECTIVE -> OriDetective(o)
             OriScreen.BANK -> OriBank(o)
+            OriScreen.INTRUS -> OriIntrus(o)
+            OriScreen.DEFS -> OriDefs(o)
         }
     }
 }
@@ -715,7 +904,7 @@ private fun OriMenu(g: Game) {
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        OriTop("Course d'orientation", "Les symboles des cartes", { g.goHome() })
+        OriTop("Course d'orientation", "Les symboles des cartes", { g.goMenu() })
         Column(
             Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(O_ACCENT).padding(14.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -740,7 +929,10 @@ private fun OriMenu(g: Game) {
                 OButton("Photo ↔ symbole", Color.White, Color(0xFF2E7D4F), Modifier.weight(1f)) { o.startTerrain() }
                 OButton("Détective du poste", Color.White, Color(0xFF2E7D4F), Modifier.weight(1f)) { o.startDetective() }
             }
-            OButton("📷  Banque de photos", Color(0x33FFFFFF), Color.White, Modifier.fillMaxWidth()) { o.openBank() }
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                OButton("🔎 L'intrus", Color.White, Color(0xFF2E7D4F), Modifier.weight(1f)) { o.startIntrus() }
+                OButton("📷 Banque de photos", Color(0x33FFFFFF), Color.White, Modifier.weight(1f)) { o.openBank() }
+            }
         }
         Ori.LEVELS.forEachIndexed { k, name ->
             val lv = k + 1
@@ -765,10 +957,13 @@ private fun OriMenu(g: Game) {
                     OButton("Memory", O_BG, O_INK, Modifier.weight(1f)) { o.startMemory(lv) }
                     OButton("Quiz", O_BG, O_INK, Modifier.weight(1f)) { o.startQuiz(lv) }
                 }
+                if (lv == 7) {
+                    OButton("📋  Lis la définition : où est la balise ?", O_ACCENT, Color.White, Modifier.fillMaxWidth()) { o.startDefs() }
+                }
             }
         }
         Text(
-            "Bientôt : niveau 7, les définitions de postes (symboles IOF).",
+            "Niveau 7 : sans symbole dans la colonne G, la balise est au centre de l'élément (règle IOF).",
             fontSize = 12.sp, color = O_SUB, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center
         )
     }
@@ -1173,7 +1368,7 @@ private fun OriBank(o: OriGame) {
                     fontSize = 11.sp, color = O_SUB
                 )
             }
-            items(Ori.ALL.filter { it.level > 1 }, key = { it.id }) { s ->
+            items(Ori.ALL.filter { it.level in 2..6 }, key = { it.id }) { s ->
                 val mine = all.filter { it.symbol == s.id }
                 Column(
                     Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Color.White).padding(10.dp),
@@ -1220,6 +1415,117 @@ private fun OriBank(o: OriGame) {
                         Text("• ${Ori.byId(p.symbol).name} — ${p.credit}\n  ${p.page ?: ""}", fontSize = 10.sp, lineHeight = 12.sp, color = O_SUB)
                     }
                 }
+            }
+        }
+    }
+}
+
+
+/* ---------- L'intrus ---------- */
+
+@Composable
+private fun OriIntrus(o: OriGame) {
+    if (o.intrus.isEmpty()) { Text("…"); return }
+    val q = o.intrus[o.iIdx]
+    val picked = o.iPicked
+    Column(Modifier.fillMaxSize().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        OriTop(o.title, "Question ${o.iIdx + 1} sur ${o.intrus.size} · ✓ ${o.good}", { o.back() })
+        Text(q.prompt, fontSize = 19.sp, fontWeight = FontWeight.Bold, color = O_INK, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf(0, 2).forEach { r ->
+                Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    for (k in r..r + 1) {
+                        val s = q.syms[k]
+                        val right = s.id == q.odd.id
+                        val edge = when { picked == null -> O_LINE; right -> O_GOOD; picked == k -> O_BAD; else -> O_LINE }
+                        Column(
+                            Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(16.dp)).background(Color.White)
+                                .border(if (picked != null && (right || picked == k)) 4.dp else 2.dp, edge, RoundedCornerShape(16.dp))
+                                .clickable { o.answerI(k) }.padding(8.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterVertically)
+                        ) {
+                            SymbolTile(s, 96.dp)
+                            if (picked != null) Text(s.name, fontSize = 12.sp, lineHeight = 14.sp, color = O_INK, textAlign = TextAlign.Center)
+                        }
+                    }
+                }
+            }
+        }
+        if (picked != null) {
+            val ok = q.syms[picked].id == q.odd.id
+            Column(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(if (ok) Color(0xFFE6F6EC) else Color(0xFFFBE7E9)).padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Text(if (ok) "Bravo, tu as trouvé l'intrus !" else "L'intrus était : ${q.odd.name}", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = O_INK)
+                Text("💡 ${q.why}", fontSize = 14.sp, lineHeight = 18.sp, color = O_INK)
+                OButton("Suivant ▶", O_INK, Color.White, Modifier.fillMaxWidth()) { o.nextI() }
+            }
+        }
+    }
+}
+
+/* ---------- Lis la définition ---------- */
+
+@Composable
+private fun DefCell(w: androidx.compose.ui.unit.Dp, content: @Composable () -> Unit) {
+    Box(Modifier.width(w).height(42.dp).border(1.dp, C_BLACK), contentAlignment = Alignment.Center) { content() }
+}
+
+@Composable
+private fun OriDefs(o: OriGame) {
+    if (o.defs.isEmpty()) { Text("…"); return }
+    val q = o.defs[o.fIdx]
+    val picked = o.fPicked
+    Column(Modifier.fillMaxSize().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        OriTop(o.title, "Poste ${o.fIdx + 1} sur ${o.defs.size} · ✓ ${o.good}", { o.back() })
+        Text("Lis la ligne de la feuille de définitions. Où est la balise ?", fontSize = 15.sp, color = O_SUB, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
+        // La ligne telle qu'elle est imprimée : colonnes A à H
+        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Color.White).padding(10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Row {
+                "ABCDEFGH".forEach { c ->
+                    Box(Modifier.width(40.dp).height(20.dp), contentAlignment = Alignment.Center) {
+                        Text("$c", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = if (c == 'D' || c == 'G') O_ACCENT else O_SUB)
+                    }
+                }
+            }
+            Row {
+                DefCell(40.dp) { Text("${q.num}", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = C_BLACK) }
+                DefCell(40.dp) { Text("${q.code}", fontSize = 14.sp, color = C_BLACK) }
+                DefCell(40.dp) {}
+                DefCell(40.dp) { Canvas(Modifier.size(36.dp)) { q.d.draw(this) } }
+                DefCell(40.dp) {}
+                DefCell(40.dp) {}
+                DefCell(40.dp) { q.g?.let { g -> Canvas(Modifier.size(36.dp)) { g.draw(this) } } }
+                DefCell(40.dp) {}
+            }
+            Text("A : numéro · B : code de la balise · D : élément · G : position de la balise", fontSize = 10.sp, color = O_SUB, textAlign = TextAlign.Center)
+        }
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            q.choices.forEachIndexed { k, c ->
+                val right = c == q.answer
+                val edge = when { picked == null -> O_LINE; right -> O_GOOD; picked == k -> O_BAD; else -> O_LINE }
+                Box(
+                    Modifier.fillMaxWidth().weight(1f).clip(RoundedCornerShape(14.dp)).background(Color.White)
+                        .border(if (picked != null && (right || picked == k)) 4.dp else 2.dp, edge, RoundedCornerShape(14.dp))
+                        .clickable { o.answerF(k) }.padding(10.dp),
+                    contentAlignment = Alignment.Center
+                ) { Text(c, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = O_INK, textAlign = TextAlign.Center) }
+            }
+        }
+        if (picked != null && q.choices[picked] != q.answer) {
+            Column(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Color(0xFFFBE7E9)).padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Text(q.answer, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = O_INK)
+                Text(
+                    "💡 Colonne D : ${q.d.name.substringBefore(" (")}. " +
+                        (q.g?.let { "Colonne G : ${it.name.substringBefore(" (")}." } ?: "Colonne G vide : la balise est au centre."),
+                    fontSize = 14.sp, lineHeight = 18.sp, color = O_INK
+                )
+                OButton("Compris ▶", O_INK, Color.White, Modifier.fillMaxWidth()) { o.nextF() }
             }
         }
     }

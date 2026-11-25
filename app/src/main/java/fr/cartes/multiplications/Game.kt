@@ -9,7 +9,7 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 
-enum class Screen { HOME, MEMO, GAME, END, REVISION, DAILY_END, SUMS, ORI }
+enum class Screen { MAIN, HOME, MEMO, GAME, END, REVISION, DAILY_END, SUMS, ORI, DICTEE }
 
 enum class Mode(val label: String, val sub: String) {
     REV("Révision", "Je regarde les cartes"),
@@ -30,7 +30,7 @@ enum class Phase { PICK, IDLE, ASK, LISTEN, RIGHT, WRONG, PASSED }
 enum class Res { OK, KO, PASS }
 
 /** Déroulement d'une partie (25 cartes ou entraînement du jour) et du mode révision. */
-class Game(private val speaker: Speaker, val ear: Ear, val progress: Progress, val photos: PhotoBank) {
+class Game(private val speaker: Speaker, val ear: Ear, val progress: Progress, val photos: PhotoBank, words: WordStore) {
     private val h = Handler(Looper.getMainLooper())
     private val ui = Handler(Looper.getMainLooper())
 
@@ -39,7 +39,20 @@ class Game(private val speaker: Speaker, val ear: Ear, val progress: Progress, v
 
     fun openOri() { cancelAll(); ori.back(); screen = Screen.ORI }
 
-    var screen by mutableStateOf(Screen.HOME)
+    /** Module orthographe (dictée de mots). */
+    val dictee = DicteeGame(progress, speaker, words)
+
+    fun openDictee() { cancelAll(); dictee.back(); screen = Screen.DICTEE }
+    fun openMath() { goHome() }
+
+    /** Menu principal : mathématiques, course d'orientation, orthographe. */
+    fun goMenu() {
+        cancelAll(); ui.removeCallbacksAndMessages(null)
+        bannerOn = false; celebrateOn = false; gamePaused = false; daily = false
+        screen = Screen.MAIN; sel = null
+    }
+
+    var screen by mutableStateOf(Screen.MAIN)
     var op by mutableStateOf(Op.MUL)
     var quad by mutableIntStateOf(0)
     var mode by mutableStateOf(Mode.DEB)

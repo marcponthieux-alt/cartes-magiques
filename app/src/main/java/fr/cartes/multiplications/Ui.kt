@@ -95,6 +95,8 @@ fun App(g: Game) {
         Surface(Modifier.fillMaxSize(), color = bgScreen(g.op.univ)) {
             Box(Modifier.fillMaxSize().systemBarsPadding()) {
                 when (g.screen) {
+                    Screen.MAIN -> MainMenu(g)
+                    Screen.DICTEE -> DicteeApp(g)
                     Screen.HOME -> Home(g)
                     Screen.MEMO -> Memo(g)
                     Screen.GAME -> if (g.daily) DailyScreen(g) else GameScreen(g)
@@ -121,8 +123,13 @@ fun App(g: Game) {
                 Celebration(g)
                 if (g.gamePaused && (g.screen == Screen.GAME || g.screen == Screen.SUMS)) PauseOverlay(g)
             }
-            BackHandler(enabled = g.screen != Screen.HOME) {
-                if (g.screen == Screen.ORI && !g.ori.atMenu) g.ori.back() else g.goHome()
+            BackHandler(enabled = g.screen != Screen.MAIN) {
+                when {
+                    g.screen == Screen.ORI && !g.ori.atMenu -> g.ori.back()
+                    g.screen == Screen.DICTEE && !g.dictee.atHome -> g.dictee.back()
+                    g.screen == Screen.HOME || g.screen == Screen.ORI || g.screen == Screen.DICTEE -> g.goMenu()
+                    else -> g.goHome()
+                }
             }
         }
     }
@@ -306,9 +313,10 @@ private fun Home(g: Game) {
                 modifier = Modifier.align(Alignment.Center)
             )
             Box(
-                Modifier.align(Alignment.CenterEnd).clip(RoundedCornerShape(12.dp)).background(Color(0xFFE8743B))
-                    .clickable { g.openOri() }.padding(horizontal = 10.dp, vertical = 4.dp)
-            ) { Text("🧭 C.O.", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color.White) }
+                Modifier.align(Alignment.CenterStart).size(40.dp).clip(RoundedCornerShape(12.dp)).background(Color.White)
+                    .clickable { g.goMenu() },
+                contentAlignment = Alignment.Center
+            ) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Menu", tint = Ink) }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Op.entries.forEach { o ->
@@ -1279,6 +1287,50 @@ private fun SumSlot(g: Game, pair: Pair<Int, Int>, modifier: Modifier) {
                                 .background(if (k <= a) ca else cb)
                         )
                     }
+                }
+            }
+        }
+    }
+}
+
+
+/* ---------- Menu principal ---------- */
+
+@Composable
+private fun MainMenu(g: Game) {
+    val ver = g.progress.version
+    val mathDue = remember(ver) { g.progress.dueCount() }
+    val oriDue = remember(ver) { g.ori.dueList().size }
+    val words = g.dictee.store.weeks
+    val dicN = remember(ver, words) { g.dictee.dueCount() }
+    Column(
+        Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text("Les cartes magiques", fontSize = 32.sp, fontWeight = FontWeight.Bold, color = Ink)
+        Text("Qu'est-ce qu'on apprend aujourd'hui ?", fontSize = 16.sp, color = Sub)
+        MenuTile("🔢", "Mathématiques", "Tables + − × ÷ · sommes égales", if (mathDue > 0) "$mathDue cartes à revoir" else null, Color(0xFF2F6FD6)) { g.openMath() }
+        MenuTile("🧭", "Course d'orientation", "Les symboles des cartes", if (oriDue > 0) "$oriDue symboles à revoir" else null, Color(0xFFE8743B)) { g.openOri() }
+        MenuTile("✏️", "Orthographe", "La dictée de mots", if (words.isEmpty()) "Ajoute les mots de la semaine" else "$dicN mots aujourd'hui", Color(0xFF7B4FC9)) { g.openDictee() }
+    }
+}
+
+@Composable
+private fun MenuTile(icon: String, title: String, sub: String, badge: String?, color: Color, onClick: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().height(118.dp).clip(RoundedCornerShape(26.dp)).background(color).clickable { onClick() }
+            .padding(horizontal = 20.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        Text(icon, fontSize = 46.sp)
+        Column(Modifier.weight(1f)) {
+            Text(title, fontSize = 23.sp, fontWeight = FontWeight.Bold, color = Color.White)
+            Text(sub, fontSize = 14.sp, color = Color.White)
+            if (badge != null) {
+                Box(Modifier.padding(top = 4.dp).clip(RoundedCornerShape(10.dp)).background(Color(0x33FFFFFF)).padding(horizontal = 8.dp, vertical = 2.dp)) {
+                    Text(badge, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
                 }
             }
         }
