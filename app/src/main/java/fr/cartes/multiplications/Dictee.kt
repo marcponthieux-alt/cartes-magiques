@@ -455,30 +455,90 @@ private fun LetterRow(cells: List<String>, style: (Int, String) -> Triple<String
 private val ROWS = listOf("azertyuiop", "qsdfghjklm", "wxcvbn'-")
 private const val ACCENTS = "éèêëàâçùûîïôœ"
 
-/** Clavier à l'écran : grandes touches, lettres accentuées sur une ligne à part. */
+/**
+ * Clavier adaptatif : les lettres utiles pour écrire le mot, ou qu'on pourrait confondre en l'écrivant,
+ * sont mises en valeur ; les autres passent en retrait (elles restent utilisables).
+ */
+object Kb {
+    const val VOWELS = "aeiouyéèêëàâùûîïôœ"
+
+    /** Confusions fréquentes à l'écrit en français (sons proches, lettres muettes, doubles écritures). */
+    private val CONF: Map<Char, String> = mapOf(
+        'a' to "àâe", 'à' to "aâ", 'â' to "aà",
+        'e' to "éèêëaiou", 'é' to "eèêai", 'è' to "eéêai", 'ê' to "eéèai", 'ë' to "eï",
+        'i' to "îïye", 'î' to "iï", 'ï' to "iî", 'y' to "i",
+        'o' to "ôaue", 'ô' to "oau", 'u' to "ùûo", 'ù' to "uû", 'û' to "uù", 'œ' to "oeu",
+        'c' to "kqsçgh", 'ç' to "cs", 'k' to "cq", 'q' to "cku", 's' to "cçzxt", 'z' to "s",
+        'x' to "skc", 'g' to "jcu", 'j' to "g", 'f' to "pvh", 'p' to "bh", 'b' to "pd",
+        'd' to "tb", 't' to "dh", 'v' to "fw", 'w' to "v", 'm' to "n", 'n' to "m", 'h' to "",
+        'l' to "", 'r' to ""
+    )
+
+    fun relevant(word: String): Set<Char> {
+        val out = mutableSetOf<Char>()
+        for (c in word) { out += c; CONF[c]?.let { out.addAll(it.toList()) } }
+        // Lettres muettes fréquentes en fin de mot, et le « h » muet.
+        out.addAll("est".toList())
+        if (word.any { it in "cpts" }) out += 'h'
+        if ("eu" in word || "oe" in word) out += 'œ'
+        return out
+    }
+}
+
 @Composable
 private fun Keyboard(d: DicteeGame) {
+    val target = d.current?.w ?: ""
+    val rel = remember(target) { Kb.relevant(target) }
     Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(14.dp).clip(RoundedCornerShape(3.dp)).background(VOW))
+            Text("voyelles", fontSize = 12.sp, color = D_SUB)
+            Box(Modifier.size(14.dp).clip(RoundedCornerShape(3.dp)).background(CONS))
+            Text("consonnes", fontSize = 12.sp, color = D_SUB)
+        }
         Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-            ACCENTS.forEach { c -> Key(c.toString(), Modifier.weight(1f), Color(0xFFEDE6FA)) { d.key(c.toString()) } }
+            ACCENTS.forEach { c -> Key(c, c in rel, Modifier.weight(1f)) { d.key(c.toString()) } }
         }
         ROWS.forEachIndexed { r, row ->
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                row.forEach { c -> Key(c.toString(), Modifier.weight(1f)) { d.key(c.toString()) } }
-                if (r == 2) Key("⌫", Modifier.weight(2f), Color(0xFFFFE3E0)) { d.erase() }
+                row.forEach { c -> Key(c, c in rel || (c in "'-" && c in target), Modifier.weight(1f)) { d.key(c.toString()) } }
+                if (r == 2) {
+                    Box(
+                        Modifier.weight(2f).height(46.dp).clip(RoundedCornerShape(8.dp)).background(Color(0xFFFFE3E0))
+                            .border(1.dp, D_LINE, RoundedCornerShape(8.dp)).clickable { d.erase() },
+                        contentAlignment = Alignment.Center
+                    ) { Text("⌫", fontSize = 21.sp, color = D_INK) }
+                }
             }
         }
         DBtn("✓  J'ai fini", D_GOOD, Color.White, Modifier.fillMaxWidth(), enabled = d.typed.isNotEmpty()) { d.validate() }
     }
 }
 
+private val VOW = Color(0xFFFFD9B0)
+private val CONS = Color(0xFFCFE0FF)
+
 @Composable
-private fun Key(t: String, modifier: Modifier, bg: Color = Color.White, onClick: () -> Unit) {
+private fun Key(c: Char, active: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    val vowel = c in Kb.VOWELS
+    val bg = when {
+        !active -> Color(0xFFF1F0F4)
+        c == '\'' || c == '-' -> Color.White
+        vowel -> VOW
+        else -> CONS
+    }
     Box(
-        modifier.height(46.dp).clip(RoundedCornerShape(8.dp)).background(bg).border(1.dp, D_LINE, RoundedCornerShape(8.dp))
+        modifier.height(46.dp).clip(RoundedCornerShape(8.dp)).background(bg)
+            .border(if (active) 1.5.dp else 1.dp, if (active) Color(0xFF9C94B8) else D_LINE, RoundedCornerShape(8.dp))
             .clickable { onClick() },
         contentAlignment = Alignment.Center
-    ) { Text(t, fontSize = 21.sp, fontWeight = FontWeight.SemiBold, color = D_INK) }
+    ) {
+        Text(
+            c.toString(), fontSize = if (active) 22.sp else 17.sp,
+            fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
+            color = if (active) D_INK else Color(0xFFBDBAC8)
+        )
+    }
 }
 
 @Composable
