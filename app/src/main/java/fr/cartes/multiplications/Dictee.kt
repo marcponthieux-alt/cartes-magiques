@@ -44,6 +44,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -421,15 +430,8 @@ private fun DAdd(d: DicteeGame, wk: Week?) {
     }
 }
 
-/** Une case lettre ; un espace devient un simple écart. La taille s'adapte à la longueur du mot. */
-@Composable
-private fun LetterBox(c: String, color: Color, bg: Color, edge: Color, w: androidx.compose.ui.unit.Dp) {
-    if (c == " ") { Spacer(Modifier.width(w * 0.6f)); return }
-    Box(
-        Modifier.width(w).height(w * 1.35f).clip(RoundedCornerShape(w * 0.22f)).background(bg).border(2.dp, edge, RoundedCornerShape(w * 0.22f)),
-        contentAlignment = Alignment.Center
-    ) { Text(c, fontSize = (w.value * 0.74f).sp, fontWeight = FontWeight.Bold, color = color) }
-}
+/** Écriture cursive scolaire (Playwrite France Moderne, licence SIL OFL). */
+private val CURSIVE = FontFamily(Font(R.font.playwrite_fr_moderne))
 
 @Composable
 private fun DPlay(d: DicteeGame) {
@@ -491,18 +493,59 @@ private fun DPlay(d: DicteeGame) {
     }
 }
 
+/**
+ * Le mot en deux écritures, sans cadre autour des lettres :
+ * en capitales, puis en cursive posée sur des lignes de cahier.
+ * Une case vide ("") est un trou à remplir ; la taille s'adapte à la longueur du mot.
+ */
 @Composable
 private fun LetterRow(cells: List<String>, style: (Int, String) -> Triple<String, Color, Color>) {
-    BoxWithConstraints(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-        val gap = 3.dp
-        val units = cells.sumOf { if (it == " ") 0.6 else 1.0 }.toFloat().coerceAtLeast(1f)
-        val w = ((maxWidth - gap * (cells.size - 1).coerceAtLeast(0)) / units).coerceAtMost(36.dp)
-        Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
-            cells.forEachIndexed { i, c ->
-                val (t, col, edge) = style(i, c)
-                LetterBox(t, col, Color.White, edge, w)
+    val styled = cells.mapIndexed { i, c -> val (t, col, _) = style(i, c); t to col }
+    fun build(upper: Boolean): AnnotatedString = buildAnnotatedString {
+        styled.forEach { (t, col) ->
+            when (t) {
+                "" -> withStyle(SpanStyle(color = D_GREY)) { append("_") }
+                " " -> append(" ")
+                else -> withStyle(SpanStyle(color = col)) { append(if (upper) t.uppercase() else t) }
             }
         }
+    }
+    BoxWithConstraints(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+        val n = styled.size.coerceAtLeast(3)
+        val fsCap = minOf(32f, maxWidth.value / (n * 0.78f))
+        val fsCur = minOf(40f, maxWidth.value / (n * 0.62f))
+        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Text(build(true), fontSize = fsCap.sp, fontWeight = FontWeight.Bold, letterSpacing = (fsCap * 0.08f).sp, maxLines = 1, softWrap = false)
+            SeyesCursive(build(false), fsCur)
+        }
+    }
+}
+
+/** La cursive sur 4 lignes de cahier, la ligne d'écriture (plus foncée) sous les lettres. */
+@Composable
+private fun SeyesCursive(text: AnnotatedString, fs: Float) {
+    var base by remember { mutableStateOf(0f) }
+    val density = LocalDensity.current
+    Box(
+        Modifier.fillMaxWidth().drawBehind {
+            if (base > 0f) {
+                val step = with(density) { fs.sp.toPx() } * 0.26f
+                for (k in -1..3) {
+                    val y = base - k * step
+                    drawLine(
+                        if (k == 0) Color(0xFF8C86A6) else Color(0xFFD9D5E6),
+                        Offset(0f, y), Offset(size.width, y), strokeWidth = if (k == 0) 2.5f else 1.4f
+                    )
+                }
+            }
+        },
+        contentAlignment = Alignment.TopCenter
+    ) {
+        Text(
+            text, fontFamily = CURSIVE, fontSize = fs.sp, maxLines = 1, softWrap = false,
+            modifier = Modifier.padding(vertical = 4.dp),
+            onTextLayout = { base = it.firstBaseline + with(density) { 4.dp.toPx() } }
+        )
     }
 }
 
