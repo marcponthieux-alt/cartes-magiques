@@ -47,7 +47,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release delete derniere-version -y --cleanup-tag || true
-          gh release create derniere-version cartes-magiques.apk \
-            --title "Cartes magiques – dernière version" \
-            --notes "Fichier à télécharger sur le téléphone : cartes-magiques.apk"
+          # Une fiche par version ; le lien « latest » pointe toujours vers la plus récente.
+          for k in 1 2 3; do
+            gh release create "v${{ github.run_number }}" cartes-magiques.apk --latest \
+              --title "Cartes magiques – version ${{ github.run_number }}" \
+              --notes "Fichier à télécharger sur le téléphone : cartes-magiques.apk" && break
+            sleep 20
+          done
+          # Ancien lien, mis à jour si GitHub le permet (sans bloquer).
+          gh release upload derniere-version cartes-magiques.apk --clobber || true
