@@ -44,12 +44,17 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -1296,8 +1301,65 @@ private fun SumSlot(g: Game, pair: Pair<Int, Int>, modifier: Modifier) {
 
 /* ---------- Menu principal ---------- */
 
+private val PLAYER_ICONS = listOf("👧", "👦", "🧒", "👩", "👨", "🦊", "🐱", "🦄", "🐼", "🚀")
+
+@Composable
+private fun PlayerDialog(g: Game, onClose: () -> Unit) {
+    val pr = g.progress
+    var name by remember { mutableStateOf("") }
+    var icon by remember { mutableStateOf(PLAYER_ICONS.first()) }
+    var del by remember { mutableStateOf<Player?>(null) }
+    var ren by remember { mutableStateOf<Player?>(null) }
+    var renName by remember { mutableStateOf("") }
+    del?.let { pl -> AskPassword({ del = null }) { pr.deletePlayer(pl.id); del = null } }
+    AlertDialog(
+        onDismissRequest = onClose,
+        title = { Text("Qui joue ?") },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                pr.players.forEach { pl ->
+                    val on = pl.id == pr.playerId
+                    Row(
+                        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(if (on) Color(0xFFE8EEFF) else Color(0xFFF6F6F6))
+                            .clickable { pr.selectPlayer(pl.id); g.goMenu(); onClose() }.padding(10.dp),
+                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(pl.icon, fontSize = 24.sp)
+                        if (ren?.id == pl.id) {
+                            OutlinedTextField(renName, { renName = it }, Modifier.weight(1f), singleLine = true)
+                            Text("OK", color = Ink, fontWeight = FontWeight.Bold, modifier = Modifier.clickable { pr.renamePlayer(pl.id, renName); ren = null }.padding(6.dp))
+                        } else {
+                            Text(pl.name + if (on) "  ✓" else "", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = Ink, modifier = Modifier.weight(1f))
+                            Text("✎", fontSize = 18.sp, color = Sub, modifier = Modifier.clickable { ren = pl; renName = pl.name }.padding(6.dp))
+                            if (pr.players.size > 1) Text("🗑", fontSize = 16.sp, modifier = Modifier.clickable { del = pl }.padding(6.dp))
+                        }
+                    }
+                }
+                Text("Ajouter un joueur", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Ink)
+                OutlinedTextField(name, { name = it }, Modifier.fillMaxWidth(), singleLine = true, label = { Text("Prénom") })
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    PLAYER_ICONS.forEach { ic ->
+                        Box(
+                            Modifier.size(40.dp).clip(CircleShape).background(if (ic == icon) Color(0xFFE8EEFF) else Color.Transparent)
+                                .clickable { icon = ic },
+                            contentAlignment = Alignment.Center
+                        ) { Text(ic, fontSize = 22.sp) }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton({ if (name.isNotBlank()) { pr.addPlayer(name, icon); g.goMenu(); onClose() } }) { Text("Ajouter") }
+        },
+        dismissButton = { TextButton(onClose) { Text("Fermer") } }
+    )
+}
+
 @Composable
 private fun MainMenu(g: Game) {
+    var choose by remember { mutableStateOf(false) }
+    if (choose) PlayerDialog(g) { choose = false }
+    val me = g.progress.player
     val ver = g.progress.version
     val mathDue = remember(ver) { g.progress.dueCount() }
     val oriDue = remember(ver) { g.ori.dueList().size }
@@ -1309,6 +1371,15 @@ private fun MainMenu(g: Game) {
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text("Les cartes magiques", fontSize = 32.sp, fontWeight = FontWeight.Bold, color = Ink)
+        Row(
+            Modifier.clip(RoundedCornerShape(20.dp)).background(Color.White).border(2.dp, Line, RoundedCornerShape(20.dp))
+                .clickable { choose = true }.padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(me.icon, fontSize = 26.sp)
+            Text(me.name, fontSize = 19.sp, fontWeight = FontWeight.Bold, color = Ink)
+            Text("· changer ▾", fontSize = 13.sp, color = Sub)
+        }
         Text("Qu'est-ce qu'on apprend aujourd'hui ?", fontSize = 16.sp, color = Sub)
         MenuTile("🔢", "Mathématiques", "Tables + − × ÷ · sommes égales", if (mathDue > 0) "$mathDue cartes à revoir" else null, Color(0xFF2F6FD6)) { g.openMath() }
         MenuTile("🧭", "Course d'orientation", "Les symboles des cartes", if (oriDue > 0) "$oriDue symboles à revoir" else null, Color(0xFFE8743B)) { g.openOri() }

@@ -8,6 +8,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -26,7 +27,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
+import androidx.compose.material3.TextButton
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -97,7 +101,7 @@ class WordStore(ctx: Context) {
     /** Un mot par ligne ; une phrase d'exemple facultative après « ; » (utile pour les homophones). */
     fun parse(text: String): List<Word> = text.lines().map { it.trim() }.filter { it.isNotEmpty() }.map { line ->
         val parts = line.split(";", limit = 2)
-        Word(parts[0].trim().lowercase(Locale.FRENCH), parts.getOrNull(1)?.trim() ?: "")
+        Word(parts[0].trim().lowercase(Locale.FRENCH).replace(Regex("\\s+"), " "), parts.getOrNull(1)?.trim() ?: "")
     }.filter { it.w.isNotEmpty() }.distinctBy { it.w }
 
     fun addWeek(label: String, text: String): Int {
@@ -110,6 +114,18 @@ class WordStore(ctx: Context) {
     }
 
     fun deleteWeek(id: Long) { weeks = weeks.filter { it.id != id }; save() }
+
+    /** Modifier une liste existante (protégé par mot de passe dans l'écran). */
+    fun updateWeek(id: Long, label: String, text: String): Int {
+        val ws = parse(text)
+        if (ws.isEmpty()) { deleteWeek(id); return 0 }
+        weeks = weeks.map { if (it.id == id) Week(id, label.ifBlank { it.label }, ws) else it }
+        save()
+        return ws.size
+    }
+
+    /** Texte d'une liste, tel qu'il se saisit : un mot par ligne, phrase après « ; ». */
+    fun asText(wk: Week): String = wk.words.joinToString("\n") { if (it.sentence.isBlank()) it.w else "${it.w} ; ${it.sentence}" }
 
     fun removeWord(weekId: Long, w: String) {
         weeks = weeks.map { if (it.id == weekId) Week(it.id, it.label, it.words.filter { x -> x.w != w }) else it }
@@ -145,7 +161,7 @@ object Align {
     }
 }
 
-enum class DScreen { HOME, ADD, PLAY, RESULT }
+enum class DScreen { HOME, ADD, EDIT, PLAY, RESULT }
 enum class DPhase { TYPE1, SHOW1, TYPE2, OK, FAIL }
 
 class DicteeGame(private val progress: Progress, private val speaker: Speaker, val store: WordStore) {
@@ -169,6 +185,8 @@ class DicteeGame(private val progress: Progress, private val speaker: Speaker, v
 
     fun back() { h.removeCallbacksAndMessages(null); speaker.stop(); screen = DScreen.HOME }
     fun openAdd() { screen = DScreen.ADD }
+    var editing by mutableStateOf<Week?>(null)
+    fun openEdit(wk: Week) { editing = wk; screen = DScreen.EDIT }
 
     /**
      * Dictée du jour (environ 12 mots) :
@@ -227,6 +245,7 @@ class DicteeGame(private val progress: Progress, private val speaker: Speaker, v
 
     fun validate() {
         val w = current ?: return
+        typed = typed.trim()
         if (typed.isEmpty()) return
         val target = w.w
         when (phase) {
@@ -245,8 +264,7 @@ class DicteeGame(private val progress: Progress, private val speaker: Speaker, v
                     speaker.speak("Bravo, tu as corrigé !") {}
                 } else {
                     missed += target; progress.recordWord(target, false, false); phase = DPhase.FAIL
-                    val letters = target.toList().joinToString(". ") { if (it == '\'') "apostrophe" else if (it == '-') "trait d'union" else it.toString() }
-                    speaker.speak("Pas tout à fait. Voici la bonne réponse : $target.. $letters.") {}
+                    speaker.speak("Pas tout à fait. Voici la bonne réponse.") {}
                 }
             }
             else -> {}
@@ -294,16 +312,43 @@ fun DicteeApp(g: Game) {
     Box(Modifier.fillMaxSize().background(D_BG)) {
         when (d.screen) {
             DScreen.HOME -> DHome(g)
-            DScreen.ADD -> DAdd(d)
+            DScreen.ADD -> DAdd(d, null)
+            DScreen.EDIT -> DAdd(d, d.editing)
             DScreen.PLAY -> DPlay(d)
             DScreen.RESULT -> DResult(d)
         }
     }
 }
 
+/** Demande le mot de passe parent (« papa ») avant une modification. */
+@Composable
+fun AskPassword(onDismiss: () -> Unit, onOk: () -> Unit) {
+    var pw by remember { mutableStateOf("") }
+    var bad by remember { mutableStateOf(false) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Mot de passe parent") },
+        text = {
+            Column {
+                OutlinedTextField(pw, { pw = it; bad = false }, singleLine = true, visualTransformation = PasswordVisualTransformation(), label = { Text("Mot de passe") })
+                if (bad) Text("Ce n'est pas le bon mot de passe.", color = D_BAD, fontSize = 13.sp)
+            }
+        },
+        confirmButton = { TextButton({ if (pw.trim().lowercase() == "papa") onOk() else bad = true }) { Text("Valider") } },
+        dismissButton = { TextButton(onDismiss) { Text("Annuler") } }
+    )
+}
+
 @Composable
 private fun DHome(g: Game) {
     val d = g.dictee
+    var ask by remember { mutableStateOf<Pair<String, Week>?>(null) }
+    ask?.let { (what, wk) ->
+        AskPassword({ ask = null }) {
+            ask = null
+            if (what == "edit") d.openEdit(wk) else d.store.deleteWeek(wk.id)
+        }
+    }
     val weeks = d.store.weeks
     val ver = g.progress.version
     val n = remember(ver, weeks) { d.dueCount() }
@@ -332,7 +377,8 @@ private fun DHome(g: Game) {
                             wk.label + if (wk.id == weeks.first().id) "  · en cours" else "", fontSize = 15.sp,
                             fontWeight = FontWeight.SemiBold, color = D_INK, modifier = Modifier.weight(1f)
                         )
-                        Text("Supprimer", fontSize = 12.sp, color = D_BAD, modifier = Modifier.clickable { d.store.deleteWeek(wk.id) }.padding(4.dp))
+                        Text("Modifier", fontSize = 12.sp, color = D_ACC, modifier = Modifier.clickable { ask = "edit" to wk }.padding(4.dp))
+                        Text("Supprimer", fontSize = 12.sp, color = D_BAD, modifier = Modifier.clickable { ask = "del" to wk }.padding(4.dp))
                     }
                     Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         wk.words.forEach { w ->
@@ -351,33 +397,38 @@ private fun DHome(g: Game) {
 }
 
 @Composable
-private fun DAdd(d: DicteeGame) {
-    var label by remember { mutableStateOf("") }
-    var text by remember { mutableStateOf("") }
+private fun DAdd(d: DicteeGame, wk: Week?) {
+    var label by remember(wk?.id) { mutableStateOf(wk?.label ?: "") }
+    var text by remember(wk?.id) { mutableStateOf(wk?.let { d.store.asText(it) } ?: "") }
     var msg by remember { mutableStateOf("") }
     Column(Modifier.fillMaxSize().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        DTop("Mots de ma semaine", "Pour le parent", { d.back() })
+        DTop(if (wk == null) "Mots de ma semaine" else "Modifier la liste", "Pour le parent", { d.back() })
         Text(
-            "Un mot par ligne. Pour un mot qui se prononce comme un autre, ajoute une phrase après « ; ».\nExemple :\nmaison\nverre ; Je bois dans un verre.",
+            "Un mot par ligne, avec son article si tu veux (le livre). Pour un mot qui se prononce comme un autre, ajoute une phrase après « ; ».\nExemple :\nle livre\nverre ; Je bois dans un verre.",
             fontSize = 13.sp, lineHeight = 17.sp, color = D_SUB
         )
         OutlinedTextField(label, { label = it }, Modifier.fillMaxWidth(), label = { Text("Nom de la liste (facultatif)") }, singleLine = true)
         OutlinedTextField(text, { text = it }, Modifier.fillMaxWidth().weight(1f), label = { Text("Les mots") })
         if (msg.isNotEmpty()) Text(msg, fontSize = 14.sp, color = D_GOOD, fontWeight = FontWeight.SemiBold)
         DBtn("Enregistrer", D_ACC, Color.White, Modifier.fillMaxWidth()) {
-            val k = d.store.addWeek(label, text)
-            if (k > 0) { msg = "$k mots enregistrés ✓"; text = ""; label = ""; d.back() } else msg = "Écris au moins un mot."
+            if (wk != null) {
+                d.store.updateWeek(wk.id, label, text); d.back()
+            } else {
+                val k = d.store.addWeek(label, text)
+                if (k > 0) { msg = "$k mots enregistrés ✓"; text = ""; label = ""; d.back() } else msg = "Écris au moins un mot."
+            }
         }
     }
 }
 
-/** Une case lettre. */
+/** Une case lettre ; un espace devient un simple écart. La taille s'adapte à la longueur du mot. */
 @Composable
-private fun LetterBox(c: String, color: Color, bg: Color, edge: Color) {
+private fun LetterBox(c: String, color: Color, bg: Color, edge: Color, w: androidx.compose.ui.unit.Dp) {
+    if (c == " ") { Spacer(Modifier.width(w * 0.6f)); return }
     Box(
-        Modifier.width(34.dp).height(46.dp).clip(RoundedCornerShape(8.dp)).background(bg).border(2.dp, edge, RoundedCornerShape(8.dp)),
+        Modifier.width(w).height(w * 1.35f).clip(RoundedCornerShape(w * 0.22f)).background(bg).border(2.dp, edge, RoundedCornerShape(w * 0.22f)),
         contentAlignment = Alignment.Center
-    ) { Text(c, fontSize = 26.sp, fontWeight = FontWeight.Bold, color = color) }
+    ) { Text(c, fontSize = (w.value * 0.74f).sp, fontWeight = FontWeight.Bold, color = color) }
 }
 
 @Composable
@@ -396,7 +447,7 @@ private fun DPlay(d: DicteeGame) {
             when (d.phase) {
                 DPhase.TYPE1 -> {
                     Text("Écris le mot que tu entends.", fontSize = 15.sp, color = D_SUB)
-                    LetterRow(d.typed.map { it.toString() }.ifEmpty { listOf(" ") }) { _, c -> Triple(c, D_INK, D_LINE) }
+                    LetterRow(d.typed.map { it.toString() }.ifEmpty { listOf("") }) { _, c -> Triple(c, D_INK, D_LINE) }
                 }
                 DPhase.SHOW1 -> {
                     Text("Les lettres en gris ne sont pas les bonnes.", fontSize = 15.sp, color = D_SUB)
@@ -412,12 +463,13 @@ private fun DPlay(d: DicteeGame) {
                     LetterRow((0 until n).map { k ->
                         when {
                             k < d.typed.length -> d.typed[k].toString()
+                            k < target.length && target[k] == ' ' -> " "
                             k < target.length && al != null && al.targetKnown[k] -> target[k].toString()
-                            else -> " "
+                            else -> ""
                         }
                     }) { k, c ->
                         if (k < d.typed.length) Triple(c, D_INK, D_ACC)
-                        else if (c != " ") Triple(c, D_GREY, D_LINE) else Triple(c, D_INK, D_LINE)
+                        else if (c != "") Triple(c, D_GREY, D_LINE) else Triple(c, D_INK, D_LINE)
                     }
                 }
                 DPhase.OK -> {
@@ -426,11 +478,8 @@ private fun DPlay(d: DicteeGame) {
                 }
                 DPhase.FAIL -> {
                     Text("Pas tout à fait… Voici la bonne réponse :", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = D_INK, textAlign = TextAlign.Center)
-                    val al2 = Align.run(d.typed, target)
-                    LetterRow(target.map { it.toString() }) { k, c ->
-                        if (al2.targetKnown[k]) Triple(c, D_INK, D_LINE) else Triple(c, D_BAD, D_BAD)
-                    }
-                    Text("Les lettres en rouge sont à bien retenir.", fontSize = 13.sp, color = D_SUB)
+                    LetterRow(target.map { it.toString() }) { _, c -> Triple(c, D_INK, D_LINE) }
+                    Text("Regarde bien le mot pour le retenir.", fontSize = 13.sp, color = D_SUB)
                 }
             }
         }
@@ -444,10 +493,15 @@ private fun DPlay(d: DicteeGame) {
 
 @Composable
 private fun LetterRow(cells: List<String>, style: (Int, String) -> Triple<String, Color, Color>) {
-    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-        cells.forEachIndexed { i, c ->
-            val (t, col, edge) = style(i, c)
-            LetterBox(t, col, Color.White, edge)
+    BoxWithConstraints(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+        val gap = 3.dp
+        val units = cells.sumOf { if (it == " ") 0.6 else 1.0 }.toFloat().coerceAtLeast(1f)
+        val w = ((maxWidth - gap * (cells.size - 1).coerceAtLeast(0)) / units).coerceAtMost(36.dp)
+        Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
+            cells.forEachIndexed { i, c ->
+                val (t, col, edge) = style(i, c)
+                LetterBox(t, col, Color.White, edge, w)
+            }
         }
     }
 }
@@ -479,6 +533,7 @@ object Kb {
         for (c in word) { out += c; CONF[c]?.let { out.addAll(it.toList()) } }
         // Lettres muettes fréquentes en fin de mot, et le « h » muet.
         out.addAll("est".toList())
+        if (' ' in word) out += ' '
         if (word.any { it in "cpts" }) out += 'h'
         if ("eu" in word || "oe" in word) out += 'œ'
         return out
@@ -511,7 +566,16 @@ private fun Keyboard(d: DicteeGame) {
                 }
             }
         }
-        DBtn("✓  J'ai fini", D_GOOD, Color.White, Modifier.fillMaxWidth(), enabled = d.typed.isNotEmpty()) { d.validate() }
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            val sp = ' ' in rel
+            Box(
+                Modifier.weight(3f).height(46.dp).clip(RoundedCornerShape(8.dp)).background(if (sp) Color.White else Color(0xFFF1F0F4))
+                    .border(if (sp) 1.5.dp else 1.dp, if (sp) Color(0xFF9C94B8) else D_LINE, RoundedCornerShape(8.dp))
+                    .clickable { if (d.typed.isNotEmpty() && !d.typed.endsWith(" ")) d.key(" ") },
+                contentAlignment = Alignment.Center
+            ) { Text("espace", fontSize = 15.sp, color = if (sp) D_INK else Color(0xFFBDBAC8)) }
+            DBtn("✓  J'ai fini", D_GOOD, Color.White, Modifier.weight(2f), enabled = d.typed.isNotEmpty()) { d.validate() }
+        }
     }
 }
 

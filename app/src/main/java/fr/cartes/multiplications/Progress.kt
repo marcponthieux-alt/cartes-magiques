@@ -8,7 +8,10 @@ import android.os.Handler
 import android.os.Looper
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import org.json.JSONArray
+import org.json.JSONObject
 import kotlin.math.PI
 import kotlin.math.max
 import kotlin.math.min
@@ -21,12 +24,67 @@ import kotlin.math.sin
  * d'une boîte ; une bonne réponse lente garde la même boîte (la carte n'est pas encore automatisée).
  * La carte revient ensuite après 0, 1, 3, 7 puis 14 jours : la révision espacée consolide la mémoire.
  */
+class Player(val id: String, val name: String, val icon: String)
+
 class Progress(ctx: Context) {
-    private val p = ctx.getSharedPreferences("progres", Context.MODE_PRIVATE)
+    private val app = ctx.applicationContext
+
+    /* ----- Les joueurs : chacun a sa propre progression ----- */
+
+    private val meta = app.getSharedPreferences("joueurs", Context.MODE_PRIVATE)
+    var players by mutableStateOf(loadPlayers())
+        private set
+    var playerId by mutableStateOf(meta.getString("current", "default") ?: "default")
+        private set
+    val player: Player get() = players.firstOrNull { it.id == playerId } ?: players.first()
+
+    /** Le premier joueur garde la progression déjà enregistrée avant l'ajout des joueurs. */
+    private fun prefsFor(id: String) =
+        app.getSharedPreferences(if (id == "default") "progres" else "progres_$id", Context.MODE_PRIVATE)
+
+    private var p = prefsFor(playerId)
 
     /** Change à chaque enregistrement, pour rafraîchir l'affichage. */
     var version by mutableIntStateOf(0)
         private set
+
+    private fun loadPlayers(): List<Player> {
+        val l = try {
+            val arr = JSONArray(meta.getString("list", "[]"))
+            (0 until arr.length()).map { val o = arr.getJSONObject(it); Player(o.getString("id"), o.getString("name"), o.optString("icon", "🙂")) }
+        } catch (e: Exception) { emptyList() }
+        return l.ifEmpty { listOf(Player("default", "Joueur 1", "🙂")) }
+    }
+
+    private fun savePlayers() {
+        val arr = JSONArray()
+        players.forEach { arr.put(JSONObject().put("id", it.id).put("name", it.name).put("icon", it.icon)) }
+        meta.edit().putString("list", arr.toString()).putString("current", playerId).apply()
+    }
+
+    fun selectPlayer(id: String) {
+        if (players.none { it.id == id }) return
+        playerId = id; p = prefsFor(id); savePlayers(); version++
+    }
+
+    fun addPlayer(name: String, icon: String) {
+        val id = "j" + System.currentTimeMillis()
+        players = players + Player(id, name.trim().ifBlank { "Joueur ${players.size + 1}" }, icon)
+        selectPlayer(id)
+    }
+
+    fun renamePlayer(id: String, name: String) {
+        if (name.isBlank()) return
+        players = players.map { if (it.id == id) Player(it.id, name.trim(), it.icon) else it }
+        savePlayers(); version++
+    }
+
+    fun deletePlayer(id: String) {
+        if (players.size <= 1) return
+        prefsFor(id).edit().clear().apply()
+        players = players.filter { it.id != id }
+        if (playerId == id) selectPlayer(players.first().id) else { savePlayers(); version++ }
+    }
 
     private fun today(): Long = System.currentTimeMillis() / 86_400_000L
 
