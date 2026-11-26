@@ -215,6 +215,7 @@ object IofDefs {
                 "pont" -> "sur $n"
                 "escalier" -> "dans $n"
                 "aucun" -> if (e.nom == "ruisseau" || e.nom == "limite de végétation") "sur $n" else "à $n".replace("à le ", "au ")
+                "pt_haut" -> "juste contre $n"
                 else -> "au centre $dn"
             }
             COTE -> "du côté $dir $dn"
