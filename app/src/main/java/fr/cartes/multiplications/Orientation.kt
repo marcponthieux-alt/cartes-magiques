@@ -174,7 +174,8 @@ object Ori {
         "L'eau",
         "Le relief",
         "Les rochers",
-        "Les définitions de postes"
+        "Définitions : l'élément (colonne D)",
+        "Définitions : où est la balise (C et G)"
     )
     val LEVEL_WHY = listOf(
         "La base : chaque couleur a un sens.",
@@ -183,7 +184,8 @@ object Ori {
         "Des repères faciles à reconnaître sur le terrain.",
         "Plus difficile : lire la forme du terrain avec les courbes marron.",
         "Des repères précis, souvent choisis pour placer les postes.",
-        "La feuille de définitions (IOF 2024) : quel élément, et où est la balise."
+        "La feuille de définitions IOF 2024, colonne D : sur quel élément est la balise.",
+        "Colonne C : lequel parmi plusieurs pareils. Colonne G : où, autour de l'élément."
     )
 
     val ALL: List<Sym> = listOf(
@@ -316,61 +318,8 @@ object Ori {
         },
         Sym("pierreux", 6, Fam.NOIR, "Sol pierreux", "De petits points noirs.") { SCATTER.forEach { (x, y) -> dot(x, y, 2.6f, C_BLACK) } },
         Sym("trou_rocheux", 6, Fam.NOIR, "Trou rocheux", "Un V noir.") { vee(C_BLACK) },
-        Sym("affleurement", 6, Fam.NOIR, "Affleurement rocheux (roche nue)", "Du gris : de la roche à nu.") { drawPath(lake(), C_GREY) },
-
-        // 7. Définitions de postes (IOF 2024) — colonne D : l'élément ; colonne G : où est la balise
-        Sym("d_colline", 7, Fam.NOIR, "Colline (colonne D)", "Une forme ovale : comme la courbe fermée de la carte.") {
-            drawOval(C_BLACK, o(20f, 32f), Size(60f * u(), 36f * u()), style = Stroke(5f * u()))
-        },
-        Sym("d_butte", 7, Fam.NOIR, "Butte (colonne D)", "Un point plein : une petite bosse.") { dot(50f, 50f, 13f, C_BLACK) },
-        Sym("d_depression", 7, Fam.NOIR, "Petite dépression (colonne D)", "Un U : un petit creux.") {
-            drawArc(C_BLACK, 0f, 180f, false, o(28f, 22f), Size(44f * u(), 44f * u()), style = Stroke(6f * u()))
-        },
-        Sym("d_trou", 7, Fam.NOIR, "Trou (colonne D)", "Un V : un trou.") { vee(C_BLACK) },
-        Sym("d_rentrant", 7, Fam.NOIR, "Rentrant (colonne D)", "Une forme en arche : un petit vallon qui entre dans la pente.") {
-            val pth = Path().apply {
-                val a = o(22f, 82f); moveTo(a.x, a.y)
-                val c1 = o(22f, 18f); val c2 = o(78f, 18f); val b = o(78f, 82f)
-                cubicTo(c1.x, c1.y, c2.x, c2.y, b.x, b.y)
-            }
-            drawPath(pth, C_BLACK, style = Stroke(6f * u()))
-        },
-        Sym("d_falaise", 7, Fam.NOIR, "Falaise (colonne D)", "Un trait avec des dents, comme sur la carte.") { toothed(C_BLACK, 5f, 16f) },
-        Sym("d_rocher", 7, Fam.NOIR, "Rocher, bloc rocheux (colonne D)", "Un triangle plein.") { tri(50f, 52f, 24f, C_BLACK) },
-        Sym("d_clairiere", 7, Fam.NOIR, "Clairière (colonne D)", "Un cercle en pointillés : un trou dans la forêt.") {
-            drawCircle(C_BLACK, 28f * u(), o(50f, 50f), style = Stroke(5f * u(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(7f * u(), 6f * u()))))
-        },
-        Sym("d_souche", 7, Fam.NOIR, "Souche (colonne D)", "Un cercle barré d'une croix.") {
-            ring(50f, 50f, 28f, C_BLACK, 5f); stroke(path(31f to 31f, 69f to 69f), C_BLACK, 5f); stroke(path(69f to 31f, 31f to 69f), C_BLACK, 5f)
-        },
-        Sym("d_ruine", 7, Fam.NOIR, "Ruine (colonne D)", "Un carré en pointillés : un bâtiment écroulé.") {
-            stroke(path(25f to 25f, 75f to 25f, 75f to 75f, 25f to 75f, close = true), C_BLACK, 5f, floatArrayOf(9f, 6f))
-        },
-        Sym("d_batiment", 7, Fam.NOIR, "Bâtiment (colonne D)", "Un carré plein.") { drawRect(C_BLACK, o(27f, 27f), Size(46f * u(), 46f * u())) },
-        Sym("d_borne", 7, Fam.NOIR, "Borne (colonne D)", "Un cercle avec un point au milieu.") { ring(50f, 50f, 26f, C_BLACK, 5f); dot(50f, 50f, 7f, C_BLACK) },
-        Sym("d_tour", 7, Fam.NOIR, "Tour (colonne D)", "Un T.") { stroke(path(22f to 24f, 78f to 24f), C_BLACK, 7f); stroke(path(50f to 24f, 50f to 82f), C_BLACK, 7f) },
-        Sym("d_arbre", 7, Fam.NOIR, "Arbre remarquable (colonne D)", "Un petit arbre dessiné.") {
-            stroke(path(50f to 86f, 50f to 52f), C_BLACK, 6f); ring(50f, 36f, 19f, C_BLACK, 5f)
-        },
-        Sym("g_nord", 7, Fam.NOIR, "Côté nord (colonne G)", "Le point est en haut : la balise est du côté nord de l'élément.") {
-            ring(50f, 52f, 26f, C_BLACK, 4f); dot(50f, 26f, 8f, C_BLACK)
-        },
-        Sym("g_est", 7, Fam.NOIR, "Côté est (colonne G)", "Le point est à droite : côté est.") { ring(50f, 50f, 26f, C_BLACK, 4f); dot(76f, 50f, 8f, C_BLACK) },
-        Sym("g_sud", 7, Fam.NOIR, "Côté sud (colonne G)", "Le point est en bas : côté sud.") { ring(50f, 48f, 26f, C_BLACK, 4f); dot(50f, 74f, 8f, C_BLACK) },
-        Sym("g_ouest", 7, Fam.NOIR, "Côté ouest (colonne G)", "Le point est à gauche : côté ouest.") { ring(50f, 50f, 26f, C_BLACK, 4f); dot(24f, 50f, 8f, C_BLACK) },
-        Sym("g_pied", 7, Fam.NOIR, "Au pied (colonne G)", "Un angle avec un point en bas : la balise est au pied (d'une falaise, d'un rocher…).") {
-            stroke(path(30f to 16f, 30f to 80f, 84f to 80f), C_BLACK, 5f); dot(42f, 69f, 7f, C_BLACK)
-        },
-        Sym("g_sur", 7, Fam.NOIR, "Sur (colonne G)", "Le point est au-dessus : la balise est sur l'élément.") {
-            stroke(path(22f to 80f, 22f to 52f, 78f to 52f, 78f to 80f), C_BLACK, 5f); dot(50f, 32f, 8f, C_BLACK)
-        },
-        Sym("g_sous", 7, Fam.NOIR, "Sous (colonne G)", "Le point est en dessous : la balise est sous l'élément.") {
-            stroke(path(22f to 80f, 22f to 30f, 78f to 30f, 78f to 80f), C_BLACK, 5f); dot(50f, 60f, 8f, C_BLACK)
-        },
-        Sym("g_entre", 7, Fam.NOIR, "Entre (colonne G)", "Un point entre deux traits : la balise est entre deux éléments.") {
-            stroke(path(18f to 28f, 82f to 28f), C_BLACK, 5f); stroke(path(18f to 72f, 82f to 72f), C_BLACK, 5f); dot(50f, 50f, 8f, C_BLACK)
-        }
-    )
+        Sym("affleurement", 6, Fam.NOIR, "Affleurement rocheux (roche nue)", "Du gris : de la roche à nu.") { drawPath(lake(), C_GREY) }
+    ) + IofDefs.syms()
 
     fun level(n: Int): List<Sym> = ALL.filter { it.level == n }
     fun byId(id: String): Sym = ALL.first { it.id == id }
@@ -393,7 +342,10 @@ class TerrainQ(val photo: PhotoItem, val sym: Sym, val choices: List<Sym>)
 class IntrusQ(val prompt: String, val syms: List<Sym>, val odd: Sym, val why: String)
 
 /** Une ligne de la feuille de définitions : élément (D) et position de la balise (G, null = au centre). */
-class DefQ(val num: Int, val code: Int, val d: Sym, val g: Sym?, val choices: List<String>, val answer: String)
+class DefQ(
+    val num: Int, val code: Int, val c: Sym?, val d: Sym, val e: Sym?, val g: Sym?,
+    val choices: List<String>, val answer: String, val why: String
+)
 
 /** Un petit extrait de carte avec un poste (coordonnées de 0 à 100). */
 class Scene(
@@ -403,7 +355,9 @@ class Scene(
     val yellow: Pair<Float, Float>,
     val green: Pair<Float, Float>,
     val pathY: Float,
-    val choices: List<Sym>
+    val choices: List<Sym>,
+    val ask: Sym = target,
+    val toD: Boolean = false
 )
 
 class OriGame(private val progress: Progress, private val speaker: Speaker, val photos: PhotoBank) {
@@ -477,7 +431,7 @@ class OriGame(private val progress: Progress, private val speaker: Speaker, val 
     fun dueList(): List<Sym> = Ori.ALL.filter { progress.oriDue(it.id) }
 
     /** Le premier niveau pas encore bien su : c'est le niveau conseillé. */
-    fun nextLevel(): Int = (1..7).firstOrNull { known(it) < Ori.level(it).size } ?: 7
+    fun nextLevel(): Int = (1..8).firstOrNull { known(it) < Ori.level(it).size } ?: 8
 
     /** Révision du jour : les symboles à revoir, plus 3 nouveaux du niveau conseillé (pratique espacée et mélangée). */
     private fun dailySet(): List<Sym> {
@@ -576,20 +530,24 @@ class OriGame(private val progress: Progress, private val speaker: Speaker, val 
     /* ----- Quiz : trouver le bon symbole, le bon nom ou la bonne couleur ----- */
 
     /** Groupes de symboles qui se mélangent dans les questions : couleurs / symboles de carte / définitions IOF. */
-    private fun grp(l: Int): Int = if (l == 1) 0 else if (l == 7) 2 else 1
+    private fun grp(l: Int): Int = when (l) { 1 -> 0; 7 -> 2; 8, 9 -> 3; else -> 1 }
+
+    /** Même dessin, autre direction : « côté nord » et « côté est » ont la même base. */
+    private fun base(id: String): String = id.trimEnd('N', 'E', 'S', 'W')
 
     fun startQuiz(lv: Int) {
         level = lv; title = titleFor(lv); lastGame = OriScreen.QUIZ
         val set = setFor(lv).shuffled().take(8)
         quiz = set.mapIndexed { k, s ->
             val type = when {
-                s.level == 1 || s.level == 7 -> if (k % 2 == 0) QType.NAME_TO_SYM else QType.SYM_TO_NAME
+                s.level == 1 || s.level >= 7 -> if (k % 2 == 0) QType.NAME_TO_SYM else QType.SYM_TO_NAME
                 k % 4 == 3 -> QType.SYM_TO_FAM
                 k % 2 == 0 -> QType.NAME_TO_SYM
                 else -> QType.SYM_TO_NAME
             }
             // Distracteurs de la même couleur d'abord : on apprend à distinguer ce qui se ressemble.
             val same = Ori.ALL.filter { it.id != s.id && it.fam == s.fam && grp(it.level) == grp(s.level) }.shuffled()
+                .sortedByDescending { if (s.level >= 8 && base(it.id) == base(s.id)) 1 else 0 }
             val other = Ori.ALL.filter { it.id != s.id && it !in same && grp(it.level) == grp(s.level) }.shuffled()
             val choices = (listOf(s) + (same + other).take(3)).shuffled()
             val fams = (listOf(s.fam) + Fam.entries.filter { it != s.fam }.shuffled().take(3)).shuffled()
@@ -649,16 +607,22 @@ class OriGame(private val progress: Progress, private val speaker: Speaker, val 
 
     /* ----- Détective du poste : que trouve-t-on au centre du cercle ? ----- */
 
-    private val pointIds = listOf(
-        "butte", "depression", "trou", "bloc", "gros_bloc", "groupe_blocs", "trou_rocheux",
-        "trou_eau", "puits", "gros_arbre", "buisson", "batiment"
+    /** Les éléments qu'on peut trouver au centre d'un cercle, et leur symbole de colonne D (IOF 2024). */
+    private val pointToD = linkedMapOf(
+        "butte" to "1.10", "butte_allongee" to "1.10", "depression" to "1.13", "trou" to "1.14",
+        "talus" to "1.4", "falaise" to "2.1", "bloc" to "2.4", "gros_bloc" to "2.4", "groupe_blocs" to "2.6",
+        "zone_blocs" to "2.5", "pierreux" to "2.7", "trou_rocheux" to "1.14", "trou_eau" to "3.3",
+        "puits" to "3.9", "gros_arbre" to "4.9", "buisson" to "4.9", "batiment" to "5.11"
     )
+    private val pointIds = pointToD.keys.toList()
 
-    /** Symboles de même forme mais de couleur différente : point, V, carré… */
+    /** Symboles de même forme mais de couleur différente : point, V, carré, dents… */
     private fun shape(id: String): String = when (id) {
-        "butte", "bloc", "gros_bloc", "buisson" -> "point"
-        "trou", "trou_rocheux", "trou_eau" -> "v"
+        "butte", "butte_allongee", "bloc", "gros_bloc", "buisson", "gros_arbre" -> "point"
+        "trou", "trou_rocheux", "trou_eau", "depression" -> "v"
         "puits", "batiment" -> "carre"
+        "falaise", "talus" -> "dents"
+        "groupe_blocs", "zone_blocs", "pierreux" -> "blocs"
         else -> id
     }
 
@@ -668,17 +632,27 @@ class OriGame(private val progress: Progress, private val speaker: Speaker, val 
         val cells = listOf(
             22f to 22f, 50f to 20f, 78f to 24f, 20f to 50f, 50f to 52f, 80f to 50f, 24f to 80f, 52f to 80f, 80f to 78f
         )
-        scenes = points.shuffled().take(8).map { target ->
+        // 10 postes : un sur deux, on demande le nom ; un sur deux, le symbole de la colonne D.
+        scenes = points.shuffled().take(10).mapIndexed { n, target ->
             val spots = cells.shuffled()
-            val decoys = points.filter { it.id != target.id }.shuffled().take(4)
+            val decoys = points.filter { it.id != target.id && pointToD[it.id] != pointToD[target.id] }.shuffled().take(4)
             val items = listOf(Triple(target, spots[0].first, spots[0].second)) +
                 decoys.mapIndexed { i, d -> Triple(d, spots[i + 1].first, spots[i + 1].second) }
-            // Les mauvaises réponses : des éléments présents sur la carte, et des formes qui se ressemblent.
             val alike = points.filter { it.id != target.id && (it.fam == target.fam || shape(it.id) == shape(target.id)) }
-            val choices = (listOf(target) + (decoys.take(2) + alike.shuffled() + decoys).distinct().take(3)).shuffled()
-            Scene(
-                target, items, spots[5], spots[6], spots[7], (30..70).random().toFloat(), choices
-            )
+            val toD = n % 2 == 1
+            val ask: Sym
+            val choices: List<Sym>
+            if (!toD) {
+                ask = target
+                choices = (listOf(target) + (decoys.take(2) + alike.shuffled() + decoys).distinct().take(3)).shuffled()
+            } else {
+                // Relier la carte à la feuille : quel symbole de colonne D décrit ce poste ?
+                ask = Ori.byId("iof_D" + pointToD.getValue(target.id))
+                val others = (alike.shuffled() + decoys).map { "iof_D" + pointToD.getValue(it.id) }.distinct()
+                    .filter { it != ask.id }.map { Ori.byId(it) }
+                choices = (listOf(ask) + others.take(3)).shuffled()
+            }
+            Scene(target, items, spots[5], spots[6], spots[7], (30..70).random().toFloat(), choices, ask, toD)
         }
         dIdx = 0; dPicked = null; errors = 0; good = 0; total = scenes.size
         screen = OriScreen.DETECTIVE
@@ -688,9 +662,9 @@ class OriGame(private val progress: Progress, private val speaker: Speaker, val 
         if (dPicked != null) return
         dPicked = k
         val sc = scenes[dIdx]
-        val ok = sc.choices[k].id == sc.target.id
+        val ok = sc.choices[k].id == sc.ask.id
         if (ok) good++ else errors++
-        progress.recordOri(sc.target.id, ok)
+        progress.recordOri(sc.ask.id, ok)
         if (ok) h.postDelayed({ nextD() }, 1600)
     }
 
@@ -747,51 +721,76 @@ class OriGame(private val progress: Progress, private val speaker: Speaker, val 
 
     /* ----- Lis la définition : où est la balise ? ----- */
 
-    /** Élément de la colonne D : (« la colline », « de la colline »). */
-    private val dWords = mapOf(
-        "d_colline" to ("la colline" to "de la colline"), "d_butte" to ("la butte" to "de la butte"),
-        "d_depression" to ("la dépression" to "de la dépression"), "d_trou" to ("le trou" to "du trou"),
-        "d_rentrant" to ("le rentrant" to "du rentrant"), "d_falaise" to ("la falaise" to "de la falaise"),
-        "d_rocher" to ("le rocher" to "du rocher"), "d_clairiere" to ("la clairière" to "de la clairière"),
-        "d_souche" to ("la souche" to "de la souche"), "d_ruine" to ("la ruine" to "de la ruine"),
-        "d_batiment" to ("le bâtiment" to "du bâtiment"), "d_borne" to ("la borne" to "de la borne"),
-        "d_tour" to ("la tour" to "de la tour"), "d_arbre" to ("l'arbre" to "de l'arbre")
-    )
-    private val gOk = mapOf(
-        "g_pied" to setOf("d_falaise", "d_rocher", "d_tour", "d_batiment", "d_arbre", "d_borne"),
-        "g_sur" to setOf("d_colline", "d_butte", "d_rocher", "d_souche"),
-        "g_sous" to setOf("d_arbre")
-    )
-
-    private fun sentence(d: String, g: String?): String {
-        val (le, de) = dWords.getValue(d)
-        return "La balise est " + when (g) {
-            null -> "au centre $de"
-            "g_nord" -> "côté nord $de"
-            "g_est" -> "côté est $de"
-            "g_sud" -> "côté sud $de"
-            "g_ouest" -> "côté ouest $de"
-            "g_pied" -> "au pied $de"
-            "g_sur" -> "sur $le"
-            "g_sous" -> "sous $le"
-            else -> "près $de"
-        } + "."
+    /** Une ligne possible : élément (D), lequel (C), position (G) et direction. */
+    private class Pick(val e: DEl, val c: String?, val g: GFam?, val dir: String?) {
+        fun text() = IofDefs.sentence(e, c, g, dir)
     }
 
-    private fun validG(d: String): List<String?> =
-        listOf(null, "g_nord", "g_est", "g_sud", "g_ouest") + gOk.filter { d in it.value }.keys
+    private fun randomPick(withC: Boolean): Pick {
+        while (true) {
+            val e = IofDefs.D.random()
+            val g = IofDefs.gFor(e).random()
+            val dir = if (g?.dirs == true) IofDefs.DIRS.random() else null
+            val cs = IofDefs.cFor(e)
+            val c = if (withC && cs.isNotEmpty() && g != IofDefs.ENTRE) cs.random() else null
+            if (withC && c == null) continue
+            return Pick(e, c, g, dir)
+        }
+    }
+
+    /** Mauvaises réponses : on change UNE seule chose (direction, position, lequel, ou élément). */
+    private fun distractors(p: Pick): List<String> {
+        val out = linkedSetOf<String>()
+        val answer = p.text()
+        fun add(q: Pick) { val t = q.text(); if (t != answer) out += t }
+        // 1. même position, autre direction (souvent la direction opposée ou voisine)
+        if (p.dir != null) IofDefs.DIRS.filter { it != p.dir }.shuffled().take(2).forEach { add(Pick(p.e, p.c, p.g, it)) }
+        // 2. autre position autour du même élément
+        IofDefs.gFor(p.e).filter { it != p.g }.shuffled().forEach { g ->
+            add(Pick(p.e, if (g == IofDefs.ENTRE) null else p.c, g, if (g?.dirs == true) p.dir ?: IofDefs.DIRS.random() else null))
+        }
+        // 3. autre colonne C
+        if (p.c != null) {
+            IofDefs.cFor(p.e).filter { it != p.c }.shuffled().take(2).forEach { add(Pick(p.e, it, p.g, p.dir)) }
+            add(Pick(p.e, null, p.g, p.dir))
+        }
+        // 4. même position, autre élément qui se ressemble (même sorte)
+        IofDefs.D.filter { it != p.e && it.cat == p.e.cat }.shuffled().take(2).forEach { add(Pick(it, p.c, p.g, p.dir)) }
+        val list = out.toList()
+        // un peu de chaque sorte d'erreur, sans toujours le même ordre
+        val pick = mutableListOf<String>()
+        listOf(list.take(2), list.drop(2)).forEach { part -> part.shuffled().firstOrNull()?.let { pick += it } }
+        (list.shuffled()).forEach { if (pick.size < 3 && it !in pick) pick += it }
+        return pick.take(3)
+    }
 
     fun startDefs() {
-        title = "Lis la définition"; lastGame = OriScreen.DEFS; level = 7
-        defs = (1..8).map { num ->
-            val d = dWords.keys.random()
-            val g = validG(d).random()
-            val answer = sentence(d, g)
-            val alts = mutableListOf<String>()
-            validG(d).shuffled().forEach { g2 -> if (g2 != g) alts += sentence(d, g2) }
-            dWords.keys.shuffled().forEach { d2 -> if (d2 != d && g in validG(d2)) alts += sentence(d2, g) }
-            val choices = (listOf(answer) + alts.distinct().shuffled().take(3)).shuffled()
-            DefQ(num, (31..99).random(), Ori.byId(d), g?.let { Ori.byId(it) }, choices, answer)
+        title = "Lis la définition"; lastGame = OriScreen.DEFS; level = 8
+        val used = mutableSetOf<String>()
+        defs = (1..10).map { num ->
+            // 4 lignes sur 10 ont une colonne C remplie
+            var p = randomPick(num % 5 == 2 || num % 5 == 4)
+            var tries = 0
+            while (p.text() in used && tries++ < 20) p = randomPick(p.c != null)
+            used += p.text()
+            val answer = p.text()
+            val choices = (listOf(answer) + distractors(p)).shuffled()
+            val gSym = p.g?.let { Ori.byId(IofDefs.gId(it, p.dir)) }
+            val cSym = p.c?.let { Ori.byId(IofDefs.cId(it)) }
+            val dSym = Ori.byId(p.e.id)
+            val why = buildString {
+                append(if (cSym != null) "Colonne C : ${cSym.name.substringBefore(" (")}. " else "Colonne C vide : il n'y en a qu'un. ")
+                append("Colonne D : ${p.e.nom}. ")
+                append(
+                    when {
+                        gSym == null && p.e.cat == "relief_lin" && p.e.nom == "falaise" -> "Colonne G vide : pour une falaise, la balise est au pied, au milieu."
+                        gSym == null -> "Colonne G vide : la balise est au centre de l'élément."
+                        p.g == IofDefs.ENTRE -> "Colonne G : entre. Les deux éléments sont en colonnes D et E."
+                        else -> "Colonne G : ${gSym.name.substringBefore(" (")}. ${gSym.tip}"
+                    }
+                )
+            }
+            DefQ(num, (31..99).random(), cSym, dSym, if (p.g == IofDefs.ENTRE) dSym else null, gSym, choices, answer, why)
         }
         fIdx = 0; fPicked = null; errors = 0; good = 0; total = defs.size
         screen = OriScreen.DEFS
@@ -803,7 +802,7 @@ class OriGame(private val progress: Progress, private val speaker: Speaker, val 
         val q = defs[fIdx]
         val ok = q.choices[k] == q.answer
         if (ok) good++ else errors++
-        progress.recordOri(q.d.id, ok); q.g?.let { progress.recordOri(it.id, ok) }
+        progress.recordOri(q.d.id, ok); q.g?.let { progress.recordOri(it.id, ok) }; q.c?.let { progress.recordOri(it.id, ok) }
         if (ok) h.postDelayed({ nextF() }, 1600)
     }
 
@@ -957,13 +956,13 @@ private fun OriMenu(g: Game) {
                     OButton("Memory", O_BG, O_INK, Modifier.weight(1f)) { o.startMemory(lv) }
                     OButton("Quiz", O_BG, O_INK, Modifier.weight(1f)) { o.startQuiz(lv) }
                 }
-                if (lv == 7) {
+                if (lv == 8) {
                     OButton("📋  Lis la définition : où est la balise ?", O_ACCENT, Color.White, Modifier.fillMaxWidth()) { o.startDefs() }
                 }
             }
         }
         Text(
-            "Niveau 7 : sans symbole dans la colonne G, la balise est au centre de l'élément (règle IOF).",
+            "Niveaux 7 et 8 : symboles officiels IOF 2024. Sans symbole en colonne G, la balise est au centre de l'élément (au pied pour une falaise).",
             fontSize = 12.sp, color = O_SUB, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center
         )
     }
@@ -1332,14 +1331,21 @@ private fun OriDetective(o: OriGame) {
     Column(Modifier.fillMaxSize().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         OriTop(o.title, "Poste ${o.dIdx + 1} sur ${o.scenes.size} · ✓ ${o.good}", { o.back() })
         Text(
-            "Qu'y a-t-il au centre du cercle violet ?", fontSize = 15.sp, color = O_SUB,
-            modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center
+            if (sc.toD) "Quel symbole écrire dans la colonne D pour ce poste ?" else "Qu'y a-t-il au centre du cercle violet ?",
+            fontSize = 15.sp, color = O_SUB, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center
         )
-        SceneMap(sc, Modifier.fillMaxWidth().height(260.dp))
-        AnswerGrid(4, picked, { k -> sc.choices[k].id == sc.target.id }, { o.answerD(it) }) { k ->
-            Text(sc.choices[k].name, fontSize = 15.sp, lineHeight = 18.sp, fontWeight = FontWeight.SemiBold, color = O_INK, textAlign = TextAlign.Center)
+        SceneMap(sc, Modifier.fillMaxWidth().height(if (sc.toD) 230.dp else 260.dp))
+        AnswerGrid(4, picked, { k -> sc.choices[k].id == sc.ask.id }, { o.answerD(it) }) { k ->
+            if (sc.toD) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    SymbolTile(sc.choices[k], 64.dp)
+                    if (picked != null) Text(sc.choices[k].name, fontSize = 11.sp, lineHeight = 13.sp, color = O_INK, modifier = Modifier.weight(1f))
+                }
+            } else {
+                Text(sc.choices[k].name, fontSize = 15.sp, lineHeight = 18.sp, fontWeight = FontWeight.SemiBold, color = O_INK, textAlign = TextAlign.Center)
+            }
         }
-        if (picked != null) Feedback(sc.choices[picked].id == sc.target.id, sc.target) { o.nextD() }
+        if (picked != null) Feedback(sc.choices[picked].id == sc.ask.id, sc.ask) { o.nextD() }
     }
 }
 
@@ -1486,21 +1492,21 @@ private fun OriDefs(o: OriGame) {
             Row {
                 "ABCDEFGH".forEach { c ->
                     Box(Modifier.width(40.dp).height(20.dp), contentAlignment = Alignment.Center) {
-                        Text("$c", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = if (c == 'D' || c == 'G') O_ACCENT else O_SUB)
+                        Text("$c", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = if (c in "CDEG") O_ACCENT else O_SUB)
                     }
                 }
             }
             Row {
                 DefCell(40.dp) { Text("${q.num}", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = C_BLACK) }
                 DefCell(40.dp) { Text("${q.code}", fontSize = 14.sp, color = C_BLACK) }
-                DefCell(40.dp) {}
+                DefCell(40.dp) { q.c?.let { c -> Canvas(Modifier.size(36.dp)) { c.draw(this) } } }
                 DefCell(40.dp) { Canvas(Modifier.size(36.dp)) { q.d.draw(this) } }
-                DefCell(40.dp) {}
+                DefCell(40.dp) { q.e?.let { e -> Canvas(Modifier.size(36.dp)) { e.draw(this) } } }
                 DefCell(40.dp) {}
                 DefCell(40.dp) { q.g?.let { g -> Canvas(Modifier.size(36.dp)) { g.draw(this) } } }
                 DefCell(40.dp) {}
             }
-            Text("A : numéro · B : code de la balise · D : élément · G : position de la balise", fontSize = 10.sp, color = O_SUB, textAlign = TextAlign.Center)
+            Text("A : numéro · B : code · C : lequel · D : élément · E : 2e élément · G : où est la balise", fontSize = 10.sp, color = O_SUB, textAlign = TextAlign.Center)
         }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             q.choices.forEachIndexed { k, c ->
@@ -1511,7 +1517,7 @@ private fun OriDefs(o: OriGame) {
                         .border(if (picked != null && (right || picked == k)) 4.dp else 2.dp, edge, RoundedCornerShape(14.dp))
                         .clickable { o.answerF(k) }.padding(10.dp),
                     contentAlignment = Alignment.Center
-                ) { Text(c, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = O_INK, textAlign = TextAlign.Center) }
+                ) { Text(c, fontSize = 15.sp, lineHeight = 18.sp, fontWeight = FontWeight.SemiBold, color = O_INK, textAlign = TextAlign.Center) }
             }
         }
         if (picked != null && q.choices[picked] != q.answer) {
@@ -1520,11 +1526,7 @@ private fun OriDefs(o: OriGame) {
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 Text(q.answer, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = O_INK)
-                Text(
-                    "💡 Colonne D : ${q.d.name.substringBefore(" (")}. " +
-                        (q.g?.let { "Colonne G : ${it.name.substringBefore(" (")}." } ?: "Colonne G vide : la balise est au centre."),
-                    fontSize = 14.sp, lineHeight = 18.sp, color = O_INK
-                )
+                Text("💡 ${q.why}", fontSize = 14.sp, lineHeight = 18.sp, color = O_INK)
                 OButton("Compris ▶", O_INK, Color.White, Modifier.fillMaxWidth()) { o.nextF() }
             }
         }
