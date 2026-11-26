@@ -475,11 +475,14 @@ private fun DPlay(d: DicteeGame) {
                     }
                 }
                 DPhase.OK -> {
-                    Text("Bravo ! ⭐", fontSize = 30.sp, fontWeight = FontWeight.Bold, color = D_GOOD)
+                    // L'encouragement reste discret : c'est le mot qu'on doit regarder.
+                    Text("Bravo ! ⭐", fontSize = 22.sp, fontWeight = FontWeight.SemiBold, color = D_SUB)
+                    Spacer(Modifier.height(40.dp))
                     LetterRow(target.map { it.toString() }) { _, c -> Triple(c, D_GOOD, D_GOOD) }
                 }
                 DPhase.FAIL -> {
-                    Text("Pas tout à fait… Voici la bonne réponse :", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = D_INK, textAlign = TextAlign.Center)
+                    Text("Pas tout à fait… Voici la bonne réponse :", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = D_SUB, textAlign = TextAlign.Center)
+                    Spacer(Modifier.height(40.dp))
                     LetterRow(target.map { it.toString() }) { _, c -> Triple(c, D_INK, D_LINE) }
                     Text("Regarde bien le mot pour le retenir.", fontSize = 13.sp, color = D_SUB)
                 }

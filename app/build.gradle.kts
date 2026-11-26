@@ -12,8 +12,8 @@ android {
         applicationId = "fr.cartes.multiplications"
         minSdk = 26
         targetSdk = 34
-        versionCode = 13
-        versionName = "6.4"
+        versionCode = 14
+        versionName = "6.5"
         ndk {
             abiFilters += listOf("arm64-v8a", "armeabi-v7a")
         }
